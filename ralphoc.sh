@@ -9,7 +9,7 @@ fi
 MAX=${1:-100}
 SLEEP=${2:-2}
 
-OPENCODE_MODEL=${OPENCODE_MODEL:-openai/o3-opus-4.5}
+OPENCODE_MODEL=${OPENCODE_MODEL:-anthropic/claude-opus-4-5}
 OPENCODE_AGENT=${OPENCODE_AGENT:-}
 # Note: OPENCODE_ARGS splits on whitespace. Arguments containing spaces are not supported.
 OPENCODE_ARGS=${OPENCODE_ARGS:-}
