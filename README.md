@@ -19,40 +19,99 @@ Ralph runs an AI coding assistant in a loop, feeding it tasks from a PRD (Produc
 |------|-------------|
 | `ralphcc.sh` | Main runner using Claude Code CLI |
 | `ralphoc.sh` | Alternative runner using OpenCode CLI |
+| `ralph.env.example` | Configuration template with all options |
+| `ralph.env` | Your local configuration (auto-created on first run) |
 
-## Usage
-
-### Ralph with Claude Code
-
-```bash
-./ralphcc.sh [max_iterations] [sleep_seconds]
-```
-
-**Examples:**
-```bash
-./ralphcc.sh           # 100 iterations, 2 second delay
-./ralphcc.sh 50 5      # 50 iterations, 5 second delay
-```
-
-**Requirements:** [Claude CLI](https://github.com/anthropics/claude-code) (`claude` command)
-
-### Ralph with OpenCode
+## Quick Start
 
 ```bash
-./ralphoc.sh [max_iterations] [sleep_seconds]
+# Using Claude Code
+./ralphcc.sh
+
+# Using OpenCode
+./ralphoc.sh
+
+# Infinite mode (run until all tasks complete)
+./ralphcc.sh -1
+./ralphoc.sh -1
 ```
 
-**Environment variables:**
-- `OPENCODE_MODEL` - AI model (default: `openai/o3-opus-4.5`)
-- `OPENCODE_AGENT` - OpenCode agent profile
-- `OPENCODE_ARGS` - Additional CLI arguments
+## Configuration
 
-**Example:**
+Ralph uses a `ralph.env` file for configuration. On first run, it's auto-created from `ralph.env.example`.
+
+### Config File (`ralph.env`)
+
 ```bash
-OPENCODE_MODEL=anthropic/claude-3-opus ./ralphoc.sh 50
+# Maximum iterations (-1 for infinite)
+RALPH_MAX_ITERATIONS=10
+
+# Sleep seconds between iterations
+RALPH_SLEEP_SECONDS=2
+
+# Claude Code model (for ralphcc.sh)
+# Options: opus, sonnet, haiku
+RALPH_CLAUDE_MODEL=opus
+
+# OpenCode model (for ralphoc.sh)
+# See ralph.env.example for full model list
+RALPH_OPENCODE_MODEL=anthropic/claude-opus-4-5
+
+# Skip commits during runs (useful for testing)
+RALPH_SKIP_COMMIT=0
+
+# Additional OpenCode CLI arguments
+# Example: --variant xhigh (for reasoning models)
+RALPH_OPENCODE_ARGS=
 ```
 
-**Requirements:** OpenCode CLI (`opencode` command)
+### Priority Order
+
+Settings are applied in this order (highest priority first):
+
+1. CLI arguments (`./ralphcc.sh 50 5`)
+2. Environment variables (`RALPH_MAX_ITERATIONS=50 ./ralphcc.sh`)
+3. Config file (`ralph.env`)
+4. Built-in defaults
+
+### Available Models
+
+**Claude Code (`ralphcc.sh`):**
+- `opus` - Claude Opus (most capable)
+- `sonnet` - Claude Sonnet (balanced)
+- `haiku` - Claude Haiku (fastest)
+
+**OpenCode (`ralphoc.sh`):**
+
+Run `opencode models` for full list. Common options:
+
+| Provider | Models |
+|----------|--------|
+| OpenCode | `opencode/big-pickle`, `opencode/glm-4.7-free`, `opencode/gpt-5-nano` |
+| Anthropic | `anthropic/claude-opus-4-5`, `anthropic/claude-sonnet-4-5` |
+| OpenAI | `openai/gpt-5.2-codex`, `openai/gpt-5.2` |
+
+## Usage Examples
+
+```bash
+# Default settings from config
+./ralphcc.sh
+
+# Override max iterations via CLI
+./ralphcc.sh 50
+
+# Override via environment variable
+RALPH_MAX_ITERATIONS=50 ./ralphcc.sh
+
+# Infinite mode until all tasks complete
+./ralphcc.sh -1
+
+# Use specific OpenCode model with reasoning
+OPENCODE_MODEL="openai/gpt-5.2-codex" OPENCODE_ARGS="--variant xhigh" ./ralphoc.sh
+
+# Test run without commits
+RALPH_SKIP_COMMIT=1 ./ralphoc.sh
+```
 
 ## Project Setup
 
@@ -70,20 +129,16 @@ Your project needs:
 
 3. **`AGENTS.md`** (optional) - Reusable patterns for the codebase
 
-## Configuration
-
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `max_iterations` | 100 | Maximum number of AI iterations |
-| `sleep_seconds` | 2 | Delay between iterations |
-
 ## Key Features
 
 - **One task per iteration** - Ensures atomic, testable changes
 - **Test-gated completion** - Never marks tasks done if tests fail
 - **Progress persistence** - Learnings survive across iterations
 - **Auto-commit** - Commits changes automatically with descriptive messages
-- **Multiple backends** - Supports Claude CLI and OpenCode CLI
+- **Infinite mode** - Run until all tasks complete with `-1`
+- **Skip commits** - Test PRDs without polluting git history
+- **Multiple backends** - Supports Claude Code CLI and OpenCode CLI
+- **Configurable** - Central config file with env var and CLI overrides
 
 ## Exit Codes
 
@@ -91,6 +146,11 @@ Your project needs:
 |------|---------|
 | 0 | All tasks completed successfully |
 | 1 | Max iterations reached or error occurred |
+
+## Requirements
+
+- **Claude Code:** [Claude CLI](https://docs.anthropic.com/en/docs/claude-code) (`claude` command)
+- **OpenCode:** [OpenCode CLI](https://opencode.ai) (`opencode` command)
 
 ## License
 
