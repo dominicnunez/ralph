@@ -22,7 +22,6 @@ ENV_RALPH_MAX_ITERATIONS=${RALPH_MAX_ITERATIONS-}
 ENV_RALPH_SLEEP_SECONDS=${RALPH_SLEEP_SECONDS-}
 ENV_RALPH_SKIP_COMMIT=${RALPH_SKIP_COMMIT-}
 ENV_RALPH_OPENCODE_MODEL=${RALPH_OPENCODE_MODEL-}
-ENV_RALPH_OPENCODE_AGENT=${RALPH_OPENCODE_AGENT-}
 ENV_RALPH_OPENCODE_ARGS=${RALPH_OPENCODE_ARGS-}
 
 # Load config file if it exists
@@ -43,9 +42,6 @@ fi
 if [[ -n "$ENV_RALPH_OPENCODE_MODEL" ]]; then
     RALPH_OPENCODE_MODEL="$ENV_RALPH_OPENCODE_MODEL"
 fi
-if [[ -n "$ENV_RALPH_OPENCODE_AGENT" ]]; then
-    RALPH_OPENCODE_AGENT="$ENV_RALPH_OPENCODE_AGENT"
-fi
 if [[ -n "$ENV_RALPH_OPENCODE_ARGS" ]]; then
     RALPH_OPENCODE_ARGS="$ENV_RALPH_OPENCODE_ARGS"
 fi
@@ -57,7 +53,6 @@ SKIP_COMMIT=${RALPH_SKIP_COMMIT:-0}
 
 # OpenCode-specific settings (env vars override config for backwards compatibility)
 OPENCODE_MODEL=${OPENCODE_MODEL:-${RALPH_OPENCODE_MODEL:-anthropic/claude-opus-4-5}}
-OPENCODE_AGENT=${OPENCODE_AGENT:-${RALPH_OPENCODE_AGENT:-}}
 # Note: OPENCODE_ARGS splits on whitespace. Arguments containing spaces are not supported.
 OPENCODE_ARGS=${OPENCODE_ARGS:-${RALPH_OPENCODE_ARGS:-}}
 
@@ -155,9 +150,6 @@ while [[ "$MAX" -eq -1 ]] || [[ "$i" -lt "$MAX" ]]; do
     cmd=(opencode run)
     if [[ -n "$OPENCODE_MODEL" ]]; then
         cmd+=(--model "$OPENCODE_MODEL")
-    fi
-    if [[ -n "$OPENCODE_AGENT" ]]; then
-        cmd+=(--agent "$OPENCODE_AGENT")
     fi
     if [[ -n "$OPENCODE_ARGS" ]]; then
         read -r -a extra_args <<< "$OPENCODE_ARGS"
