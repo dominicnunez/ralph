@@ -6,15 +6,80 @@ if ! command -v opencode &>/dev/null; then
     exit 1
 fi
 
-MAX=${1:-100}
-SLEEP=${2:-2}
+# Determine script directory for config file location
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CONFIG_FILE="$SCRIPT_DIR/ralph.env"
+EXAMPLE_FILE="$SCRIPT_DIR/ralph.env.example"
 
-OPENCODE_MODEL=${OPENCODE_MODEL:-anthropic/claude-opus-4-5}
-OPENCODE_AGENT=${OPENCODE_AGENT:-}
+# Create default config from example if it doesn't exist
+if [[ ! -f "$CONFIG_FILE" && -f "$EXAMPLE_FILE" ]]; then
+    echo "Creating ralph.env from ralph.env.example..."
+    cp "$EXAMPLE_FILE" "$CONFIG_FILE"
+fi
+
+# Preserve environment overrides before sourcing config
+ENV_RALPH_MAX_ITERATIONS=${RALPH_MAX_ITERATIONS-}
+ENV_RALPH_SLEEP_SECONDS=${RALPH_SLEEP_SECONDS-}
+ENV_RALPH_SKIP_COMMIT=${RALPH_SKIP_COMMIT-}
+ENV_RALPH_OPENCODE_MODEL=${RALPH_OPENCODE_MODEL-}
+ENV_RALPH_OPENCODE_AGENT=${RALPH_OPENCODE_AGENT-}
+ENV_RALPH_OPENCODE_ARGS=${RALPH_OPENCODE_ARGS-}
+
+# Load config file if it exists
+if [[ -f "$CONFIG_FILE" ]]; then
+    source "$CONFIG_FILE"
+fi
+
+# Restore environment overrides (env vars take precedence over config)
+if [[ -n "$ENV_RALPH_MAX_ITERATIONS" ]]; then
+    RALPH_MAX_ITERATIONS="$ENV_RALPH_MAX_ITERATIONS"
+fi
+if [[ -n "$ENV_RALPH_SLEEP_SECONDS" ]]; then
+    RALPH_SLEEP_SECONDS="$ENV_RALPH_SLEEP_SECONDS"
+fi
+if [[ -n "$ENV_RALPH_SKIP_COMMIT" ]]; then
+    RALPH_SKIP_COMMIT="$ENV_RALPH_SKIP_COMMIT"
+fi
+if [[ -n "$ENV_RALPH_OPENCODE_MODEL" ]]; then
+    RALPH_OPENCODE_MODEL="$ENV_RALPH_OPENCODE_MODEL"
+fi
+if [[ -n "$ENV_RALPH_OPENCODE_AGENT" ]]; then
+    RALPH_OPENCODE_AGENT="$ENV_RALPH_OPENCODE_AGENT"
+fi
+if [[ -n "$ENV_RALPH_OPENCODE_ARGS" ]]; then
+    RALPH_OPENCODE_ARGS="$ENV_RALPH_OPENCODE_ARGS"
+fi
+
+# Set defaults (CLI args -> env vars -> config file -> built-in defaults)
+MAX=${1:-${RALPH_MAX_ITERATIONS:-100}}
+SLEEP=${2:-${RALPH_SLEEP_SECONDS:-2}}
+SKIP_COMMIT=${RALPH_SKIP_COMMIT:-0}
+
+# OpenCode-specific settings (env vars override config for backwards compatibility)
+OPENCODE_MODEL=${OPENCODE_MODEL:-${RALPH_OPENCODE_MODEL:-anthropic/claude-opus-4-5}}
+OPENCODE_AGENT=${OPENCODE_AGENT:-${RALPH_OPENCODE_AGENT:-}}
 # Note: OPENCODE_ARGS splits on whitespace. Arguments containing spaces are not supported.
-OPENCODE_ARGS=${OPENCODE_ARGS:-}
+OPENCODE_ARGS=${OPENCODE_ARGS:-${RALPH_OPENCODE_ARGS:-}}
 
 COMPLETE_MARKER="<promise>COMPLETE</promise>"
+
+if [[ "$SKIP_COMMIT" == "1" ]]; then
+    COMMIT_INSTRUCTIONS=$(cat <<'EOF'
+- If tests PASS:
+  - Update PRD.md to mark the task complete (change [ ] to [x])
+  - Do NOT commit any changes in this run
+  - Append what worked to progress.txt
+EOF
+)
+else
+    COMMIT_INSTRUCTIONS=$(cat <<'EOF'
+- If tests PASS:
+  - Update PRD.md to mark the task complete (change [ ] to [x])
+  - Commit your changes with message: feat: [task description] (do NOT add Co-Authored-By)
+  - Append what worked to progress.txt
+EOF
+)
+fi
 
 PROMPT=$(cat <<EOF
 You are Ralph, an autonomous coding agent. Do exactly ONE task per iteration.
@@ -28,10 +93,7 @@ You are Ralph, an autonomous coding agent. Do exactly ONE task per iteration.
 
 ## Critical: Only Complete If Tests Pass
 
-- If tests PASS:
-  - Update PRD.md to mark the task complete (change [ ] to [x])
-  - Commit your changes with message: feat: [task description] (do NOT add Co-Authored-By)
-  - Append what worked to progress.txt
+$COMMIT_INSTRUCTIONS
 
 - If tests FAIL:
   - Do NOT mark the task complete
@@ -66,13 +128,29 @@ After completing your task, check PRD.md:
 EOF
 )
 
-echo "Starting Ralph (opencode) - Max $MAX iterations"
+if [[ "$MAX" -eq -1 ]]; then
+    echo "Starting Ralph (opencode) - Infinite mode (until complete)"
+else
+    echo "Starting Ralph (opencode) - Max $MAX iterations"
+fi
+echo "Using model: $OPENCODE_MODEL"
+if [[ "$SKIP_COMMIT" == "1" ]]; then
+    echo "Commits disabled for this run"
+fi
 echo ""
 
-for ((i=1; i<=$MAX; i++)); do
-    echo "==========================================="
-    echo "  Iteration $i of $MAX"
-    echo "==========================================="
+i=0
+while [[ "$MAX" -eq -1 ]] || [[ "$i" -lt "$MAX" ]]; do
+    ((i++))
+    if [[ "$MAX" -eq -1 ]]; then
+        echo "==========================================="
+        echo "  Iteration $i (infinite mode)"
+        echo "==========================================="
+    else
+        echo "==========================================="
+        echo "  Iteration $i of $MAX"
+        echo "==========================================="
+    fi
 
     cmd=(opencode run)
     if [[ -n "$OPENCODE_MODEL" ]]; then
@@ -98,7 +176,7 @@ for ((i=1; i<=$MAX; i++)); do
         exit 0
     fi
 
-    sleep $SLEEP
+    sleep "$SLEEP"
 done
 
 echo "==========================================="

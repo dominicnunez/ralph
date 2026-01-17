@@ -23,6 +23,7 @@ __pycache__/
 .env
 .env.local
 .env.*.local
+ralph.env
 
 # Build outputs
 dist/
@@ -39,6 +40,13 @@ result
 # Project planning
 PRD.md
 progress.txt
+
+# Test artifacts
+hello.txt
+test-output.txt
+math.sh
+ralphcc-test.log
+ralphoc-test.log
 
 # Claude
 .claude/
