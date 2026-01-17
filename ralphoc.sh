@@ -47,12 +47,12 @@ if [[ -n "$ENV_RALPH_OPENCODE_ARGS" ]]; then
 fi
 
 # Set defaults (CLI args -> env vars -> config file -> built-in defaults)
-MAX=${1:-${RALPH_MAX_ITERATIONS:-100}}
+MAX=${1:-${RALPH_MAX_ITERATIONS:-10}}
 SLEEP=${2:-${RALPH_SLEEP_SECONDS:-2}}
 SKIP_COMMIT=${RALPH_SKIP_COMMIT:-0}
 
 # OpenCode-specific settings (env vars override config for backwards compatibility)
-OPENCODE_MODEL=${OPENCODE_MODEL:-${RALPH_OPENCODE_MODEL:-anthropic/claude-opus-4-5}}
+OPENCODE_MODEL=${OPENCODE_MODEL:-${RALPH_OPENCODE_MODEL:-opencode/glm-4.7-free}}
 # Note: OPENCODE_ARGS splits on whitespace. Arguments containing spaces are not supported.
 OPENCODE_ARGS=${OPENCODE_ARGS:-${RALPH_OPENCODE_ARGS:-}}
 
