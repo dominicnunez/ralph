@@ -17,21 +17,21 @@ Ralph runs an AI coding assistant in a loop, feeding it tasks from a PRD (Produc
 
 | File | Description |
 |------|-------------|
-| `ralph.sh` | Main runner using Claude CLI |
+| `ralphcc.sh` | Main runner using Claude Code CLI |
 | `ralphoc.sh` | Alternative runner using OpenCode CLI |
 
 ## Usage
 
-### Ralph (Claude CLI)
+### Ralph with Claude Code
 
 ```bash
-./ralph.sh [max_iterations] [sleep_seconds]
+./ralphcc.sh [max_iterations] [sleep_seconds]
 ```
 
 **Examples:**
 ```bash
-./ralph.sh           # 100 iterations, 2 second delay
-./ralph.sh 50 5      # 50 iterations, 5 second delay
+./ralphcc.sh           # 100 iterations, 2 second delay
+./ralphcc.sh 50 5      # 50 iterations, 5 second delay
 ```
 
 **Requirements:** [Claude CLI](https://github.com/anthropics/claude-code) (`claude` command)
