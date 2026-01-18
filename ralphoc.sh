@@ -180,7 +180,7 @@ switch_to_fallback() {
 
 i=0
 while [[ "$MAX" -eq -1 ]] || [[ "$i" -lt "$MAX" ]]; do
-    ((i++))
+    ((++i))
     if [[ "$MAX" -eq -1 ]]; then
         echo "==========================================="
         echo "  Iteration $i (infinite mode) - $CURRENT_MODEL"
@@ -209,7 +209,7 @@ while [[ "$MAX" -eq -1 ]] || [[ "$i" -lt "$MAX" ]]; do
     if [[ $exit_code -ne 0 ]] && is_rate_limited "$result"; then
         if switch_to_fallback; then
             # Retry this iteration with fallback model
-            ((i--))
+            ((--i))
             continue
         else
             # No fallback available or already using fallback

@@ -123,7 +123,7 @@ echo ""
 
 i=0
 while [[ "$MAX" -eq -1 ]] || [[ "$i" -lt "$MAX" ]]; do
-    ((i++))
+    ((++i))
     if [[ "$MAX" -eq -1 ]]; then
         echo "==========================================="
         echo "  Iteration $i (infinite mode)"
