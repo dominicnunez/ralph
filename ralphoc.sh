@@ -230,6 +230,19 @@ while [[ "$MAX" -eq -1 ]] || [[ "$i" -lt "$MAX" ]]; do
     echo ""
 
     if [[ "$result" == *"$COMPLETE_MARKER"* ]]; then
+        # Verify completion by checking PRD.md for incomplete tasks
+        if [[ -f "PRD.md" ]]; then
+            incomplete_count=$(grep -cE '^\s*-\s*\[ \]' PRD.md 2>/dev/null || true)
+            if [[ "$incomplete_count" -gt 0 ]]; then
+                echo ""
+                echo "==========================================="
+                echo "  Warning: Completion marker found but $incomplete_count tasks remain incomplete"
+                echo "  Continuing to next iteration..."
+                echo "==========================================="
+                sleep "$SLEEP"
+                continue
+            fi
+        fi
         echo "==========================================="
         echo "  All tasks complete after $i iterations!"
         echo "==========================================="
