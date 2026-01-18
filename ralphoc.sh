@@ -199,10 +199,13 @@ while [[ "$MAX" -eq -1 ]] || [[ "$i" -lt "$MAX" ]]; do
         cmd+=(--variant "$CURRENT_REASONING")
     fi
 
-    # Disable set -e temporarily to capture exit code
+    # Run command with real-time output streaming while capturing for rate limit detection
     set +e
-    result=$("${cmd[@]}" "$PROMPT" 2>&1)
-    exit_code=$?
+    tmpfile=$(mktemp)
+    "${cmd[@]}" "$PROMPT" 2>&1 | tee "$tmpfile"
+    exit_code=${PIPESTATUS[0]}
+    result=$(cat "$tmpfile")
+    rm -f "$tmpfile"
     set -e
 
     # Check for rate limit errors
@@ -218,13 +221,12 @@ while [[ "$MAX" -eq -1 ]] || [[ "$i" -lt "$MAX" ]]; do
             exit 1
         fi
     elif [[ $exit_code -ne 0 ]]; then
-        # Non-rate-limit error
-        echo "Error from opencode (exit code $exit_code):"
-        echo "$result"
+        # Non-rate-limit error (output already streamed)
+        echo "Error from opencode (exit code $exit_code)"
         exit $exit_code
     fi
 
-    echo "$result"
+    # Output already streamed via tee, just add spacing
     echo ""
 
     if [[ "$result" == *"$COMPLETE_MARKER"* ]]; then
