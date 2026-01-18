@@ -9,15 +9,10 @@ fi
 # Determine script directory for config file location
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_FILE="$SCRIPT_DIR/ralph.env"
-EXAMPLE_FILE="$SCRIPT_DIR/ralph.env.example"
-
-# Create default config from example if it doesn't exist
-if [[ ! -f "$CONFIG_FILE" && -f "$EXAMPLE_FILE" ]]; then
-    echo "Creating ralph.env from ralph.env.example..."
-    cp "$EXAMPLE_FILE" "$CONFIG_FILE"
-fi
 
 # Preserve environment overrides before sourcing config
+# NOTE: Env var overrides are intentionally undocumented in README.
+# This is a power-user feature for one-off runs.
 ENV_MAX_ITERATIONS=${MAX_ITERATIONS-}
 ENV_SLEEP_SECONDS=${SLEEP_SECONDS-}
 ENV_SKIP_COMMIT=${SKIP_COMMIT-}
@@ -54,9 +49,9 @@ if [[ -n "$ENV_FALLBACK_MODEL_REASONING" ]]; then
     FALLBACK_MODEL_REASONING="$ENV_FALLBACK_MODEL_REASONING"
 fi
 
-# Set defaults (CLI args -> env vars -> config file -> built-in defaults)
-MAX=${1:-${MAX_ITERATIONS:-10}}
-SLEEP=${2:-${SLEEP_SECONDS:-2}}
+# Set defaults (env vars -> config file -> built-in defaults)
+MAX=${MAX_ITERATIONS:-10}
+SLEEP=${SLEEP_SECONDS:-2}
 SKIP_COMMIT=${SKIP_COMMIT:-0}
 
 # Primary model settings
@@ -64,7 +59,7 @@ PRIMARY_MODEL=${PRIMARY_MODEL:-opencode/glm-4.7-free}
 PRIMARY_MODEL_REASONING=${PRIMARY_MODEL_REASONING:-}
 
 # Fallback model settings (used when primary hits rate limits)
-FALLBACK_MODEL=${FALLBACK_MODEL:-}
+FALLBACK_MODEL=${FALLBACK_MODEL:-opencode/minimax-m2.1-free}
 FALLBACK_MODEL_REASONING=${FALLBACK_MODEL_REASONING:-}
 
 # Track which model is currently active

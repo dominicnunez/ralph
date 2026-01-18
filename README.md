@@ -17,117 +17,67 @@ Ralph runs an AI coding assistant in a loop, feeding it tasks from a PRD (Produc
 
 | File | Description |
 |------|-------------|
-| `ralphcc.sh` | Main runner using Claude Code CLI |
-| `ralphoc.sh` | Alternative runner using OpenCode CLI |
+| `ralphcc.sh` | Runner using Claude Code CLI |
+| `ralphoc.sh` | Runner using OpenCode CLI |
 | `ralph.env.example` | Configuration template with all options |
-| `ralph.env` | Your local configuration (auto-created on first run) |
 
 ## Quick Start
 
-```bash
-# Using Claude Code
-./ralphcc.sh
-
-# Using OpenCode
-./ralphoc.sh
-
-# Infinite mode (run until all tasks complete)
-./ralphcc.sh -1
-./ralphoc.sh -1
-```
-
-## Configuration
-
-Ralph uses a `ralph.env` file for configuration. On first run, it's auto-created from `ralph.env.example`.
-
-### Config File (`ralph.env`)
-
-```bash
-# Maximum iterations (-1 for infinite)
-RALPH_MAX_ITERATIONS=10
-
-# Sleep seconds between iterations
-RALPH_SLEEP_SECONDS=2
-
-# Claude Code model (for ralphcc.sh)
-# Options: opus, sonnet, haiku
-RALPH_CLAUDE_MODEL=opus
-
-# OpenCode model (for ralphoc.sh)
-# See ralph.env.example for full model list
-RALPH_OPENCODE_MODEL=anthropic/claude-opus-4-5
-
-# Skip commits during runs (useful for testing)
-RALPH_SKIP_COMMIT=0
-
-# Additional OpenCode CLI arguments
-# Example: --variant xhigh (for reasoning models)
-RALPH_OPENCODE_ARGS=
-```
-
-### Priority Order
-
-Settings are applied in this order (highest priority first):
-
-1. CLI arguments (`./ralphcc.sh 50 5`)
-2. Environment variables (`RALPH_MAX_ITERATIONS=50 ./ralphcc.sh`)
-3. Config file (`ralph.env`)
-4. Built-in defaults
-
-### Available Models
-
-**Claude Code (`ralphcc.sh`):**
-- `opus` - Claude Opus (most capable)
-- `sonnet` - Claude Sonnet (balanced)
-- `haiku` - Claude Haiku (fastest)
-
-**OpenCode (`ralphoc.sh`):**
-
-Run `opencode models` for full list. Common options:
-
-| Provider | Models |
-|----------|--------|
-| OpenCode | `opencode/big-pickle`, `opencode/glm-4.7-free`, `opencode/gpt-5-nano` |
-| Anthropic | `anthropic/claude-opus-4-5`, `anthropic/claude-sonnet-4-5` |
-| OpenAI | `openai/gpt-5.2-codex`, `openai/gpt-5.2` |
-
-## Usage Examples
-
-```bash
-# Default settings from config
-./ralphcc.sh
-
-# Override max iterations via CLI
-./ralphcc.sh 50
-
-# Override via environment variable
-RALPH_MAX_ITERATIONS=50 ./ralphcc.sh
-
-# Infinite mode until all tasks complete
-./ralphcc.sh -1
-
-# Use specific OpenCode model with reasoning
-OPENCODE_MODEL="openai/gpt-5.2-codex" OPENCODE_ARGS="--variant xhigh" ./ralphoc.sh
-
-# Test run without commits
-RALPH_SKIP_COMMIT=1 ./ralphoc.sh
-```
-
-## Project Setup
-
-Your project needs:
-
-1. **`PRD.md`** - Task list with checkbox format:
+1. Create a `PRD.md` in your project with tasks:
    ```markdown
    ## Tasks
    - [ ] Implement user authentication
    - [ ] Add database migrations
-   - [x] Set up project structure
+   - [ ] Set up API endpoints
    ```
 
-2. **`progress.txt`** - Created automatically by Ralph to track learnings across iterations
+2. Run Ralph:
+   ```bash
+   # Using Claude Code
+   ./ralphcc.sh
 
-3. **`AGENTS.md`** (optional) - Reusable patterns for the codebase
+   # Using OpenCode
+   ./ralphoc.sh
+   ```
+
+Ralph will work through each task, running tests and committing progress automatically.
+
+## Configuration
+
+Copy `ralph.env.example` to `ralph.env` to customize settings. If no config file exists, scripts use built-in defaults.
+
+See `ralph.env.example` for all available options including model selection, reasoning variants, iteration limits, and commit behavior.
+
+### Script Defaults (No Config File)
+
+**`ralphcc.sh`:**
+
+| Setting | Default |
+|---------|---------|
+| `MAX_ITERATIONS` | `10` |
+| `SLEEP_SECONDS` | `2` |
+| `CLAUDE_MODEL` | `opus` |
+
+Note: Fallback not supported (Claude CLI only supports Claude models).
+
+**`ralphoc.sh`:**
+
+| Setting | Default |
+|---------|---------|
+| `MAX_ITERATIONS` | `10` |
+| `SLEEP_SECONDS` | `2` |
+| `PRIMARY_MODEL` | `opencode/glm-4.7-free` |
+| `FALLBACK_MODEL` | `opencode/minimax-m2.1-free` |
+
+To disable fallback, set `FALLBACK_MODEL=` (empty) in your config.
+
+## Project Files
+
+| File | Description |
+|------|-------------|
+| `PRD.md` | Task list with checkbox format (required) |
+| `progress.txt` | Created automatically to track learnings across iterations |
+| `AGENTS.md` | Reusable patterns for the codebase (optional) |
 
 ## Key Features
 
@@ -135,10 +85,9 @@ Your project needs:
 - **Test-gated completion** - Never marks tasks done if tests fail
 - **Progress persistence** - Learnings survive across iterations
 - **Auto-commit** - Commits changes automatically with descriptive messages
-- **Infinite mode** - Run until all tasks complete with `-1`
+- **Automatic fallback** - `ralphoc.sh` switches to fallback model on rate limits
 - **Skip commits** - Test PRDs without polluting git history
-- **Multiple backends** - Supports Claude Code CLI and OpenCode CLI
-- **Configurable** - Central config file with env var and CLI overrides
+- **Configurable** - Central config file for customization
 
 ## Exit Codes
 
