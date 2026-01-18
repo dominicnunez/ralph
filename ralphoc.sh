@@ -18,11 +18,13 @@ if [[ ! -f "$CONFIG_FILE" && -f "$EXAMPLE_FILE" ]]; then
 fi
 
 # Preserve environment overrides before sourcing config
-ENV_RALPH_MAX_ITERATIONS=${RALPH_MAX_ITERATIONS-}
-ENV_RALPH_SLEEP_SECONDS=${RALPH_SLEEP_SECONDS-}
-ENV_RALPH_SKIP_COMMIT=${RALPH_SKIP_COMMIT-}
-ENV_RALPH_OPENCODE_MODEL=${RALPH_OPENCODE_MODEL-}
-ENV_RALPH_OPENCODE_ARGS=${RALPH_OPENCODE_ARGS-}
+ENV_MAX_ITERATIONS=${MAX_ITERATIONS-}
+ENV_SLEEP_SECONDS=${SLEEP_SECONDS-}
+ENV_SKIP_COMMIT=${SKIP_COMMIT-}
+ENV_PRIMARY_MODEL=${PRIMARY_MODEL-}
+ENV_PRIMARY_MODEL_REASONING=${PRIMARY_MODEL_REASONING-}
+ENV_FALLBACK_MODEL=${FALLBACK_MODEL-}
+ENV_FALLBACK_MODEL_REASONING=${FALLBACK_MODEL_REASONING-}
 
 # Load config file if it exists
 if [[ -f "$CONFIG_FILE" ]]; then
@@ -30,31 +32,45 @@ if [[ -f "$CONFIG_FILE" ]]; then
 fi
 
 # Restore environment overrides (env vars take precedence over config)
-if [[ -n "$ENV_RALPH_MAX_ITERATIONS" ]]; then
-    RALPH_MAX_ITERATIONS="$ENV_RALPH_MAX_ITERATIONS"
+if [[ -n "$ENV_MAX_ITERATIONS" ]]; then
+    MAX_ITERATIONS="$ENV_MAX_ITERATIONS"
 fi
-if [[ -n "$ENV_RALPH_SLEEP_SECONDS" ]]; then
-    RALPH_SLEEP_SECONDS="$ENV_RALPH_SLEEP_SECONDS"
+if [[ -n "$ENV_SLEEP_SECONDS" ]]; then
+    SLEEP_SECONDS="$ENV_SLEEP_SECONDS"
 fi
-if [[ -n "$ENV_RALPH_SKIP_COMMIT" ]]; then
-    RALPH_SKIP_COMMIT="$ENV_RALPH_SKIP_COMMIT"
+if [[ -n "$ENV_SKIP_COMMIT" ]]; then
+    SKIP_COMMIT="$ENV_SKIP_COMMIT"
 fi
-if [[ -n "$ENV_RALPH_OPENCODE_MODEL" ]]; then
-    RALPH_OPENCODE_MODEL="$ENV_RALPH_OPENCODE_MODEL"
+if [[ -n "$ENV_PRIMARY_MODEL" ]]; then
+    PRIMARY_MODEL="$ENV_PRIMARY_MODEL"
 fi
-if [[ -n "$ENV_RALPH_OPENCODE_ARGS" ]]; then
-    RALPH_OPENCODE_ARGS="$ENV_RALPH_OPENCODE_ARGS"
+if [[ -n "$ENV_PRIMARY_MODEL_REASONING" ]]; then
+    PRIMARY_MODEL_REASONING="$ENV_PRIMARY_MODEL_REASONING"
+fi
+if [[ -n "$ENV_FALLBACK_MODEL" ]]; then
+    FALLBACK_MODEL="$ENV_FALLBACK_MODEL"
+fi
+if [[ -n "$ENV_FALLBACK_MODEL_REASONING" ]]; then
+    FALLBACK_MODEL_REASONING="$ENV_FALLBACK_MODEL_REASONING"
 fi
 
 # Set defaults (CLI args -> env vars -> config file -> built-in defaults)
-MAX=${1:-${RALPH_MAX_ITERATIONS:-10}}
-SLEEP=${2:-${RALPH_SLEEP_SECONDS:-2}}
-SKIP_COMMIT=${RALPH_SKIP_COMMIT:-0}
+MAX=${1:-${MAX_ITERATIONS:-10}}
+SLEEP=${2:-${SLEEP_SECONDS:-2}}
+SKIP_COMMIT=${SKIP_COMMIT:-0}
 
-# OpenCode-specific settings (env vars override config for backwards compatibility)
-OPENCODE_MODEL=${OPENCODE_MODEL:-${RALPH_OPENCODE_MODEL:-opencode/glm-4.7-free}}
-# Note: OPENCODE_ARGS splits on whitespace. Arguments containing spaces are not supported.
-OPENCODE_ARGS=${OPENCODE_ARGS:-${RALPH_OPENCODE_ARGS:-}}
+# Primary model settings
+PRIMARY_MODEL=${PRIMARY_MODEL:-opencode/glm-4.7-free}
+PRIMARY_MODEL_REASONING=${PRIMARY_MODEL_REASONING:-}
+
+# Fallback model settings (used when primary hits rate limits)
+FALLBACK_MODEL=${FALLBACK_MODEL:-}
+FALLBACK_MODEL_REASONING=${FALLBACK_MODEL_REASONING:-}
+
+# Track which model is currently active
+CURRENT_MODEL="$PRIMARY_MODEL"
+CURRENT_REASONING="$PRIMARY_MODEL_REASONING"
+USING_FALLBACK=0
 
 COMPLETE_MARKER="<promise>COMPLETE</promise>"
 
@@ -128,35 +144,90 @@ if [[ "$MAX" -eq -1 ]]; then
 else
     echo "Starting Ralph (opencode) - Max $MAX iterations"
 fi
-echo "Using model: $OPENCODE_MODEL"
+echo "Using model: $PRIMARY_MODEL"
+if [[ -n "$PRIMARY_MODEL_REASONING" ]]; then
+    echo "Reasoning variant: $PRIMARY_MODEL_REASONING"
+fi
+if [[ -n "$FALLBACK_MODEL" ]]; then
+    echo "Fallback model: $FALLBACK_MODEL"
+    if [[ -n "$FALLBACK_MODEL_REASONING" ]]; then
+        echo "Fallback reasoning variant: $FALLBACK_MODEL_REASONING"
+    fi
+fi
 if [[ "$SKIP_COMMIT" == "1" ]]; then
     echo "Commits disabled for this run"
 fi
 echo ""
+
+# Function to check if output indicates a rate limit error
+is_rate_limited() {
+    local output="$1"
+    # Check for common rate limit indicators
+    echo "$output" | grep -qiE 'rate.?limit|quota|429|too.?many.?request|exhausted|overloaded|capacity'
+}
+
+# Function to switch to fallback model
+switch_to_fallback() {
+    if [[ -n "$FALLBACK_MODEL" && "$USING_FALLBACK" -eq 0 ]]; then
+        echo ""
+        echo "==========================================="
+        echo "  Rate limit detected on $CURRENT_MODEL"
+        echo "  Switching to fallback: $FALLBACK_MODEL"
+        echo "==========================================="
+        echo ""
+        CURRENT_MODEL="$FALLBACK_MODEL"
+        CURRENT_REASONING="$FALLBACK_MODEL_REASONING"
+        USING_FALLBACK=1
+        return 0
+    fi
+    return 1
+}
 
 i=0
 while [[ "$MAX" -eq -1 ]] || [[ "$i" -lt "$MAX" ]]; do
     ((i++))
     if [[ "$MAX" -eq -1 ]]; then
         echo "==========================================="
-        echo "  Iteration $i (infinite mode)"
+        echo "  Iteration $i (infinite mode) - $CURRENT_MODEL"
         echo "==========================================="
     else
         echo "==========================================="
-        echo "  Iteration $i of $MAX"
+        echo "  Iteration $i of $MAX - $CURRENT_MODEL"
         echo "==========================================="
     fi
 
     cmd=(opencode run)
-    if [[ -n "$OPENCODE_MODEL" ]]; then
-        cmd+=(--model "$OPENCODE_MODEL")
+    if [[ -n "$CURRENT_MODEL" ]]; then
+        cmd+=(--model "$CURRENT_MODEL")
     fi
-    if [[ -n "$OPENCODE_ARGS" ]]; then
-        read -r -a extra_args <<< "$OPENCODE_ARGS"
-        cmd+=("${extra_args[@]}")
+    if [[ -n "$CURRENT_REASONING" ]]; then
+        cmd+=(--variant "$CURRENT_REASONING")
     fi
 
-    result=$("${cmd[@]}" "$PROMPT")
+    # Disable set -e temporarily to capture exit code
+    set +e
+    result=$("${cmd[@]}" "$PROMPT" 2>&1)
+    exit_code=$?
+    set -e
+
+    # Check for rate limit errors
+    if [[ $exit_code -ne 0 ]] && is_rate_limited "$result"; then
+        if switch_to_fallback; then
+            # Retry this iteration with fallback model
+            ((i--))
+            continue
+        else
+            # No fallback available or already using fallback
+            echo "Rate limit error and no fallback available:"
+            echo "$result"
+            exit 1
+        fi
+    elif [[ $exit_code -ne 0 ]]; then
+        # Non-rate-limit error
+        echo "Error from opencode (exit code $exit_code):"
+        echo "$result"
+        exit $exit_code
+    fi
 
     echo "$result"
     echo ""

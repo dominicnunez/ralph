@@ -18,10 +18,10 @@ if [[ ! -f "$CONFIG_FILE" && -f "$EXAMPLE_FILE" ]]; then
 fi
 
 # Preserve environment overrides before sourcing config
-ENV_RALPH_MAX_ITERATIONS=${RALPH_MAX_ITERATIONS-}
-ENV_RALPH_SLEEP_SECONDS=${RALPH_SLEEP_SECONDS-}
-ENV_RALPH_CLAUDE_MODEL=${RALPH_CLAUDE_MODEL-}
-ENV_RALPH_SKIP_COMMIT=${RALPH_SKIP_COMMIT-}
+ENV_MAX_ITERATIONS=${MAX_ITERATIONS-}
+ENV_SLEEP_SECONDS=${SLEEP_SECONDS-}
+ENV_CLAUDE_MODEL=${CLAUDE_MODEL-}
+ENV_SKIP_COMMIT=${SKIP_COMMIT-}
 
 # Load config file if it exists
 if [[ -f "$CONFIG_FILE" ]]; then
@@ -29,24 +29,24 @@ if [[ -f "$CONFIG_FILE" ]]; then
 fi
 
 # Restore environment overrides (env vars take precedence over config)
-if [[ -n "$ENV_RALPH_MAX_ITERATIONS" ]]; then
-    RALPH_MAX_ITERATIONS="$ENV_RALPH_MAX_ITERATIONS"
+if [[ -n "$ENV_MAX_ITERATIONS" ]]; then
+    MAX_ITERATIONS="$ENV_MAX_ITERATIONS"
 fi
-if [[ -n "$ENV_RALPH_SLEEP_SECONDS" ]]; then
-    RALPH_SLEEP_SECONDS="$ENV_RALPH_SLEEP_SECONDS"
+if [[ -n "$ENV_SLEEP_SECONDS" ]]; then
+    SLEEP_SECONDS="$ENV_SLEEP_SECONDS"
 fi
-if [[ -n "$ENV_RALPH_CLAUDE_MODEL" ]]; then
-    RALPH_CLAUDE_MODEL="$ENV_RALPH_CLAUDE_MODEL"
+if [[ -n "$ENV_CLAUDE_MODEL" ]]; then
+    CLAUDE_MODEL="$ENV_CLAUDE_MODEL"
 fi
-if [[ -n "$ENV_RALPH_SKIP_COMMIT" ]]; then
-    RALPH_SKIP_COMMIT="$ENV_RALPH_SKIP_COMMIT"
+if [[ -n "$ENV_SKIP_COMMIT" ]]; then
+    SKIP_COMMIT="$ENV_SKIP_COMMIT"
 fi
 
 # Set defaults (CLI args -> env vars -> config file -> built-in defaults)
-MAX=${1:-${RALPH_MAX_ITERATIONS:-100}}
-SLEEP=${2:-${RALPH_SLEEP_SECONDS:-2}}
-CLAUDE_MODEL=${RALPH_CLAUDE_MODEL:-opus}
-SKIP_COMMIT=${RALPH_SKIP_COMMIT:-0}
+MAX=${1:-${MAX_ITERATIONS:-100}}
+SLEEP=${2:-${SLEEP_SECONDS:-2}}
+CLAUDE_MODEL=${CLAUDE_MODEL:-opus}
+SKIP_COMMIT=${SKIP_COMMIT:-0}
 
 COMPLETE_MARKER="<promise>COMPLETE</promise>"
 
