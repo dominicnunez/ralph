@@ -82,12 +82,32 @@ To disable fallback, set `FALLBACK_MODEL=` (empty) in your config.
 ## Key Features
 
 - **One task per iteration** - Ensures atomic, testable changes
-- **Test-gated completion** - Never marks tasks done if tests fail
-- **Progress persistence** - Learnings survive across iterations
+- **Enforced test writing** - Verifies test files were actually created/modified
+- **Test-gated completion** - Runs test suite after each iteration, blocks progress on failure
+- **Double verification** - PRD.md check + final test suite before declaring complete
+- **Progress persistence** - Learnings survive across iterations (progress.txt)
+- **External logging** - Per-project logs at `~/.ralph/logs/ralph-<project>.log`
 - **Auto-commit** - Commits changes automatically with descriptive messages
 - **Automatic fallback** - `ralphoc.sh` switches to fallback model on rate limits
 - **Skip commits** - Test PRDs without polluting git history
 - **Configurable** - Central config file for customization
+
+## Test Verification Flow
+
+```
+Task 1 → AI implements → tests written? → NO → retry iteration
+                                        → YES → run tests → FAIL → retry
+                                                          → PASS → Task 2 → ...
+All [x] → final test suite → PASS → done ✅
+                           → FAIL → keep iterating
+```
+
+The script independently verifies:
+1. Test files were created/modified (*.test.ts, *.spec.ts, etc.)
+2. Full test suite passes after each iteration
+3. Final test suite passes before declaring complete
+
+This prevents the AI from marking tasks complete without actually writing tests.
 
 ## Exit Codes
 
