@@ -484,7 +484,10 @@ run_claude() {
 }
 
 run_opencode() {
-    opencode run --model "$CURRENT_OC_PRIME_MODEL" "$PROMPT"
+    # OpenCode requires a PTY to function - script provides a pseudo-TTY wrapper
+    # Without this, opencode hangs indefinitely in non-interactive environments
+    # (cron, background processes, piped output)
+    script -q /dev/null -c "opencode run --model \"$CURRENT_OC_PRIME_MODEL\" \"$PROMPT\""
 }
 
 run_engine() {
