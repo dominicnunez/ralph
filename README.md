@@ -2,6 +2,32 @@
 
 An autonomous AI coding agent runner that orchestrates iterative development workflows. Ralph automates the process of having an AI agent work through a task list one task at a time, with built-in progress tracking and learning mechanisms.
 
+**Key differentiator:** Enforced test verification - Ralph won't mark tasks complete unless tests are written and passing.
+
+## Install
+
+**Option A: npm** (recommended)
+
+```bash
+npm install -g sfs-cli
+
+# Then use anywhere
+sfs                        # Uses PRD.md with OpenCode (default)
+sfs --claude               # Use Claude Code
+sfs --model sonnet         # Override model
+```
+
+**Option B: Clone + Bash**
+
+```bash
+git clone https://github.com/dominicnunez/ralph.git
+cd ralph && chmod +x ralph.sh
+
+./ralph.sh                 # Uses ralph.env for configuration
+```
+
+Both versions have identical features.
+
 ## Overview
 
 Ralph runs an AI coding assistant in a loop, feeding it tasks from a PRD (Product Requirements Document) and tracking progress across iterations. Each iteration:
@@ -9,17 +35,10 @@ Ralph runs an AI coding assistant in a loop, feeding it tasks from a PRD (Produc
 1. Reads `PRD.md` to find the first incomplete task
 2. Reads `progress.txt` to learn from previous iterations
 3. Implements exactly ONE task
-4. Runs tests to verify the implementation
-5. If tests pass: marks task complete, commits, and logs progress
-6. If tests fail: logs failure details for the next iteration
-
-## Files
-
-| File | Description |
-|------|-------------|
-| `ralphcc.sh` | Runner using Claude Code CLI |
-| `ralphoc.sh` | Runner using OpenCode CLI |
-| `ralph.env.example` | Configuration template with all options |
+4. **Verifies test files were created/modified**
+5. **Runs tests to verify the implementation**
+6. If tests pass: marks task complete, commits, and logs progress
+7. If tests fail: logs failure details for the next iteration
 
 ## Quick Start
 
@@ -33,43 +52,66 @@ Ralph runs an AI coding assistant in a loop, feeding it tasks from a PRD (Produc
 
 2. Run Ralph:
    ```bash
-   # Using Claude Code
-   ./ralphcc.sh
+   # Using npm CLI
+   sfs
 
-   # Using OpenCode
-   ./ralphoc.sh
+   # Using bash script
+   ./ralph.sh
    ```
 
 Ralph will work through each task, running tests and committing progress automatically.
 
+## CLI Usage
+
+```bash
+sfs                        # Uses PRD.md, OpenCode engine (default)
+sfs --opencode             # Explicit OpenCode
+sfs --claude               # Use Claude Code
+sfs --model big-pickle     # Override model
+sfs --max-iterations 20    # Custom iteration limit
+sfs --skip-commit          # Don't auto-commit
+sfs --no-tests             # Skip test verification (not recommended)
+sfs --prd tasks.md         # Use different PRD file
+sfs -v                     # Verbose output
+sfs --help                 # Show all options
+```
+
 ## Configuration
 
-Copy `ralph.env.example` to `ralph.env` to customize settings. If no config file exists, scripts use built-in defaults.
+Copy `ralph.env.example` to `ralph.env` to customize settings:
 
-See `ralph.env.example` for all available options including model selection, reasoning variants, iteration limits, and commit behavior.
+```bash
+# Engine selection: "opencode" or "claude"
+ENGINE=opencode
 
-### Script Defaults (No Config File)
+# Model settings
+CLAUDE_MODEL=opus
+OPENCODE_MODEL=big-pickle
+# FALLBACK_MODEL=          # Optional fallback for rate limits
 
-**`ralphcc.sh`:**
+# Iteration settings
+MAX_ITERATIONS=-1          # -1 for infinite
+SLEEP_SECONDS=2
+
+# Behavior
+SKIP_COMMIT=0
+SKIP_TEST_VERIFY=0
+
+# Test command (auto-detected if not set)
+TEST_CMD=
+```
+
+CLI arguments override config file settings.
+
+### Defaults
 
 | Setting | Default |
 |---------|---------|
-| `MAX_ITERATIONS` | `10` |
-| `SLEEP_SECONDS` | `2` |
+| `ENGINE` | `opencode` |
+| `OPENCODE_MODEL` | `big-pickle` |
 | `CLAUDE_MODEL` | `opus` |
-
-Note: Fallback not supported (Claude CLI only supports Claude models).
-
-**`ralphoc.sh`:**
-
-| Setting | Default |
-|---------|---------|
 | `MAX_ITERATIONS` | `10` |
 | `SLEEP_SECONDS` | `2` |
-| `PRIMARY_MODEL` | `opencode/glm-4.7-free` |
-| `FALLBACK_MODEL` | `opencode/minimax-m2.1-free` |
-
-To disable fallback, set `FALLBACK_MODEL=` (empty) in your config.
 
 ## Project Files
 
@@ -88,18 +130,18 @@ To disable fallback, set `FALLBACK_MODEL=` (empty) in your config.
 - **Progress persistence** - Learnings survive across iterations (progress.txt)
 - **External logging** - Per-project logs at `~/.ralph/logs/ralph-<project>.log`
 - **Auto-commit** - Commits changes automatically with descriptive messages
-- **Automatic fallback** - `ralphoc.sh` switches to fallback model on rate limits
+- **Automatic fallback** - Switches to fallback model on rate limits (OpenCode)
 - **Skip commits** - Test PRDs without polluting git history
 - **Configurable** - Central config file for customization
 
 ## Test Verification Flow
 
 ```
-Task 1 → AI implements → tests written? → NO → retry iteration
-                                        → YES → run tests → FAIL → retry
-                                                          → PASS → Task 2 → ...
-All [x] → final test suite → PASS → done ✅
-                           → FAIL → keep iterating
+Task 1 -> AI implements -> tests written? -> NO -> retry iteration
+                                          -> YES -> run tests -> FAIL -> retry
+                                                              -> PASS -> Task 2 -> ...
+All [x] -> final test suite -> PASS -> done
+                            -> FAIL -> keep iterating
 ```
 
 The script independently verifies:
@@ -108,6 +150,17 @@ The script independently verifies:
 3. Final test suite passes before declaring complete
 
 This prevents the AI from marking tasks complete without actually writing tests.
+
+## AI Engines
+
+| Engine | CLI | Default Model |
+|--------|-----|---------------|
+| OpenCode | `opencode` | `big-pickle` |
+| Claude | `claude` | `opus` |
+
+### Rate Limit Handling (OpenCode)
+
+If a rate limit is detected and `FALLBACK_MODEL` is configured, Ralph automatically switches to the fallback model and retries.
 
 ## Exit Codes
 
@@ -118,8 +171,30 @@ This prevents the AI from marking tasks complete without actually writing tests.
 
 ## Requirements
 
-- **Claude Code:** [Claude CLI](https://docs.anthropic.com/en/docs/claude-code) (`claude` command)
-- **OpenCode:** [OpenCode CLI](https://opencode.ai) (`opencode` command)
+**npm version (`sfs-cli`):**
+- Node.js 18+ or Bun
+
+**Bash version (`ralph.sh`):**
+- Bash
+
+**Both versions:**
+- [OpenCode CLI](https://opencode.ai) (`opencode` command) - for OpenCode engine
+- [Claude CLI](https://docs.anthropic.com/en/docs/claude-code) (`claude` command) - for Claude engine
+
+## Development
+
+```bash
+# Clone and install
+git clone https://github.com/dominicnunez/ralph.git
+cd ralph/cli
+npm install
+
+# Run in dev mode
+npx tsx src/index.ts --help
+
+# Build binaries (requires Bun)
+bun run build:all
+```
 
 ## License
 
