@@ -1,0 +1,53 @@
+import { spawnSync } from "node:child_process";
+import type { Engine, EngineResult } from "./base.js";
+
+export class ClaudeEngine implements Engine {
+  name = "claude";
+  model: string;
+
+  constructor(model: string = "opus") {
+    this.model = model;
+  }
+
+  isAvailable(): boolean {
+    const result = spawnSync("which", ["claude"], { encoding: "utf-8" });
+    return result.status === 0;
+  }
+
+  async run(prompt: string): Promise<EngineResult> {
+    const args = [
+      "--model", this.model,
+      "--dangerously-skip-permissions",
+      "-p", prompt,
+    ];
+
+    const result = spawnSync("claude", args, {
+      encoding: "utf-8",
+      cwd: process.cwd(),
+      stdio: ["inherit", "pipe", "pipe"],
+      maxBuffer: 50 * 1024 * 1024, // 50MB buffer
+    });
+
+    const output = (result.stdout || "") + (result.stderr || "");
+    
+    // Stream output to console
+    if (result.stdout) {
+      process.stdout.write(result.stdout);
+    }
+    if (result.stderr) {
+      process.stderr.write(result.stderr);
+    }
+
+    return {
+      success: result.status === 0,
+      output,
+      exitCode: result.status ?? 1,
+      rateLimited: false, // Claude doesn't have fallback support in this implementation
+    };
+  }
+
+  // Claude doesn't support fallback in this implementation
+  switchToFallback(): boolean {
+    return false;
+  }
+}
