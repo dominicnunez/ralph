@@ -1,4 +1,5 @@
 import { Command } from "commander";
+import { statSync } from "node:fs";
 import type { Config, EngineType } from "../config/loader.js";
 
 export interface CliOptions {
@@ -14,6 +15,7 @@ export interface CliOptions {
   init?: boolean;
   force?: boolean;
   yes?: boolean;
+  singleTask?: string;
 }
 
 export interface ParsedArgs {
@@ -22,6 +24,14 @@ export interface ParsedArgs {
 
 const VERSION = "1.0.0";
 
+function isDirectory(path: string): boolean {
+  try {
+    return statSync(path).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
 export function parseArgs(argv: string[]): ParsedArgs {
   const program = new Command();
 
@@ -29,6 +39,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
     .name("sfs")
     .description("Autonomous AI coding agent with enforced test verification")
     .version(VERSION)
+    .argument("[task]", "Single task to run (non-directory positional)")
     .option("--engine <type>", "AI engine to use: opencode or claude", "opencode")
     .option("--opencode", "Use OpenCode engine (shortcut for --engine opencode)")
     .option("--claude", "Use Claude Code engine (shortcut for --engine claude)")
@@ -46,6 +57,8 @@ export function parseArgs(argv: string[]): ParsedArgs {
 
   program.parse(argv);
   const opts = program.opts();
+  const positionalArgs = program.args;
+  const firstArg = positionalArgs[0];
 
   // Handle engine shortcuts
   let engine: EngineType | undefined;
@@ -70,6 +83,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
     init: opts.init,
     force: opts.force,
     yes: opts.yes,
+    singleTask: firstArg && !isDirectory(firstArg) ? firstArg : undefined,
   };
 
   return { options };
