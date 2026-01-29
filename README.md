@@ -103,7 +103,7 @@ ENGINE=opencode
 OPENCODE_MODEL=big-pickle
 CLAUDE_MODEL=sonnet
 
-MAX_ITERATIONS=-1
+MAX_ITERATIONS=10
 SLEEP_SECONDS=2
 SKIP_COMMIT=0
 SKIP_TEST_VERIFY=0
@@ -133,11 +133,27 @@ EOF
 | `OPENCODE_MODEL` | `big-pickle` | Model for OpenCode |
 | `CLAUDE_MODEL` | `sonnet` | Model for Claude |
 | `FALLBACK_MODEL` | (none) | Fallback model for rate limits |
-| `MAX_ITERATIONS` | `-1` | Max iterations (-1 = infinite) |
+| `MAX_ITERATIONS` | `10` | Max iterations (-1 = infinite) |
 | `SLEEP_SECONDS` | `2` | Pause between iterations |
 | `SKIP_COMMIT` | `0` | Set to `1` to disable auto-commit |
 | `SKIP_TEST_VERIFY` | `0` | Set to `1` to skip test verification |
 | `TEST_CMD` | (auto) | Custom test command |
+| `RALPH_LOG_DIR` | `~/.ralph/logs` | Log directory |
+
+### Test Auto-Detection
+
+Ralph automatically detects your test command based on project files:
+
+| Detected File | Test Command |
+|---------------|--------------|
+| `package.json` with `test` script | `npm test` / `bun test` / `pnpm test` / `yarn test` |
+| `vitest.config.ts` | `npx vitest run` |
+| `jest.config.ts` | `npx jest` |
+| `pytest.ini` or `pyproject.toml` | `pytest` |
+| `go.mod` | `go test ./...` |
+| `Cargo.toml` | `cargo test` |
+
+If auto-detection fails or you need a custom command, set `TEST_CMD` in your config.
 
 ## Project Files
 
