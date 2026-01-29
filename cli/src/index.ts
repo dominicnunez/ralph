@@ -2,12 +2,23 @@
 import { parseArgs, mergeOptions } from "./cli/args.js";
 import { loadConfig } from "./config/loader.js";
 import { runLoop } from "./cli/commands/run.js";
+import { runInit } from "./cli/commands/init.js";
 import { logError } from "./ui/logger.js";
 
 async function main(): Promise<void> {
   try {
     // Parse CLI arguments
     const { options } = parseArgs(process.argv);
+
+    // Handle --init command
+    if (options.init) {
+      const result = await runInit(process.cwd(), {
+        force: options.force,
+        yes: options.yes,
+      });
+      process.exitCode = result.success ? 0 : 1;
+      return;
+    }
 
     // Load config from ralph.env
     const config = loadConfig();
