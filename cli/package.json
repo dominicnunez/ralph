@@ -10,9 +10,11 @@
   "files": [
     "dist",
     "bin.js",
+    "scripts",
     "README.md"
   ],
   "scripts": {
+    "postinstall": "node scripts/postinstall.js",
     "dev": "bun run src/index.ts",
     "build": "bun build src/index.ts --compile --minify --target=bun-darwin-arm64 --outfile dist/sfs-darwin-arm64",
     "build:darwin-arm64": "bun build src/index.ts --compile --minify --target=bun-darwin-arm64 --outfile dist/sfs-darwin-arm64",
