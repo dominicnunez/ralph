@@ -41,7 +41,7 @@ export async function runLoop(config: Config, options: RunOptions): Promise<void
   // Create engine
   const engine: Engine = config.engine === "claude"
     ? new ClaudeEngine(config.claudeModel)
-    : new OpenCodeEngine(config.opencodeModel, config.fallbackModel);
+    : new OpenCodeEngine(config.ocPrimeModel, config.ocFallModel);
 
   // Verify engine is available
   if (!engine.isAvailable()) {
@@ -60,8 +60,8 @@ export async function runLoop(config: Config, options: RunOptions): Promise<void
   console.log(`Starting Ralph (${config.engine}) - ${iterStr}`);
   console.log(`Using model: ${getCurrentModel(config)}`);
   
-  if (config.engine === "opencode" && config.fallbackModel) {
-    console.log(`Fallback model: ${config.fallbackModel}`);
+  if (config.engine === "opencode" && config.ocFallModel) {
+    console.log(`Fallback model: ${config.ocFallModel}`);
   }
   
   if (config.skipCommit) {

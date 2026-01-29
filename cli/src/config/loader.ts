@@ -17,8 +17,8 @@ export interface Config {
   claudeModel: string;
 
   // OpenCode
-  opencodeModel: string;
-  fallbackModel: string | undefined;
+  ocPrimeModel: string;
+  ocFallModel: string | undefined;
 
   // Test verification
   testCmd: string | undefined;
@@ -52,15 +52,16 @@ ENGINE=opencode
 # Model Settings
 # ─────────────────────────────────────────────────────────────
 
-# OpenCode model (big-pickle is free tier)
-OPENCODE_MODEL=big-pickle
-
 # Claude model (sonnet balances cost/capability)
 # Options: opus, sonnet, haiku
 CLAUDE_MODEL=sonnet
 
+# OpenCode models
+# Primary model (big-pickle is free tier)
+OC_PRIME_MODEL=big-pickle
+
 # Fallback model when primary hits rate limits (optional)
-# FALLBACK_MODEL=
+# OC_FALL_MODEL=
 
 # ─────────────────────────────────────────────────────────────
 # Iteration Settings
@@ -161,11 +162,11 @@ function applyEnvToConfig(config: Config, env: Record<string, string>): void {
   }
 
   // OpenCode
-  if (env.OPENCODE_MODEL) {
-    config.opencodeModel = env.OPENCODE_MODEL;
+  if (env.OC_PRIME_MODEL) {
+    config.ocPrimeModel = env.OC_PRIME_MODEL;
   }
-  if (env.FALLBACK_MODEL && env.FALLBACK_MODEL.trim()) {
-    config.fallbackModel = env.FALLBACK_MODEL;
+  if (env.OC_FALL_MODEL && env.OC_FALL_MODEL.trim()) {
+    config.ocFallModel = env.OC_FALL_MODEL;
   }
 
   // Test verification
@@ -214,8 +215,8 @@ export function loadConfig(): Config {
     sleepSeconds: 2,
     skipCommit: false,
     claudeModel: "sonnet",
-    opencodeModel: "big-pickle",
-    fallbackModel: undefined,
+    ocPrimeModel: "big-pickle",
+    ocFallModel: undefined,
     testCmd: undefined,
     skipTestVerify: false,
     logDir: join(homedir(), ".ralph", "logs"),
@@ -241,8 +242,8 @@ export function loadConfig(): Config {
   if (process.env.SLEEP_SECONDS) processEnv.SLEEP_SECONDS = process.env.SLEEP_SECONDS;
   if (process.env.SKIP_COMMIT) processEnv.SKIP_COMMIT = process.env.SKIP_COMMIT;
   if (process.env.CLAUDE_MODEL) processEnv.CLAUDE_MODEL = process.env.CLAUDE_MODEL;
-  if (process.env.OPENCODE_MODEL) processEnv.OPENCODE_MODEL = process.env.OPENCODE_MODEL;
-  if (process.env.FALLBACK_MODEL) processEnv.FALLBACK_MODEL = process.env.FALLBACK_MODEL;
+  if (process.env.OC_PRIME_MODEL) processEnv.OC_PRIME_MODEL = process.env.OC_PRIME_MODEL;
+  if (process.env.OC_FALL_MODEL) processEnv.OC_FALL_MODEL = process.env.OC_FALL_MODEL;
   if (process.env.TEST_CMD) processEnv.TEST_CMD = process.env.TEST_CMD;
   if (process.env.SKIP_TEST_VERIFY) processEnv.SKIP_TEST_VERIFY = process.env.SKIP_TEST_VERIFY;
   if (process.env.RALPH_LOG_DIR) processEnv.RALPH_LOG_DIR = process.env.RALPH_LOG_DIR;
@@ -256,7 +257,7 @@ export function loadConfig(): Config {
  * Get the current model based on engine type
  */
 export function getCurrentModel(config: Config): string {
-  return config.engine === "claude" ? config.claudeModel : config.opencodeModel;
+  return config.engine === "claude" ? config.claudeModel : config.ocPrimeModel;
 }
 
 /**

@@ -29,15 +29,16 @@ ENGINE=opencode
 # Model Settings
 # ─────────────────────────────────────────────────────────────
 
-# OpenCode model (big-pickle is free tier)
-OPENCODE_MODEL=big-pickle
-
 # Claude model (sonnet balances cost/capability)
 # Options: opus, sonnet, haiku
 CLAUDE_MODEL=sonnet
 
+# OpenCode models
+# Primary model (big-pickle is free tier)
+OC_PRIME_MODEL=big-pickle
+
 # Fallback model when primary hits rate limits (optional)
-# FALLBACK_MODEL=
+# OC_FALL_MODEL=
 
 # ─────────────────────────────────────────────────────────────
 # Iteration Settings

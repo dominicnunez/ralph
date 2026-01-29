@@ -82,7 +82,7 @@ export function mergeOptions(config: Config, cliOptions: CliOptions): Config {
     if (merged.engine === "claude") {
       merged.claudeModel = cliOptions.model;
     } else {
-      merged.opencodeModel = cliOptions.model;
+      merged.ocPrimeModel = cliOptions.model;
     }
   }
 

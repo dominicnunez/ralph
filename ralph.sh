@@ -30,8 +30,8 @@ ENV_SKIP_COMMIT=${SKIP_COMMIT-}
 ENV_CLAUDE_MODEL=${CLAUDE_MODEL-}
 
 # OpenCode settings
-ENV_OPENCODE_MODEL=${OPENCODE_MODEL-}
-ENV_FALLBACK_MODEL=${FALLBACK_MODEL-}
+ENV_OC_PRIME_MODEL=${OC_PRIME_MODEL-}
+ENV_OC_FALL_MODEL=${OC_FALL_MODEL-}
 
 # Test settings
 ENV_TEST_CMD=${TEST_CMD-}
@@ -58,15 +58,15 @@ ENGINE=opencode
 # Model Settings
 # ─────────────────────────────────────────────────────────────
 
-# OpenCode model (big-pickle is free tier)
-OPENCODE_MODEL=big-pickle
+# OpenCode primary model (big-pickle is free tier)
+OC_PRIME_MODEL=big-pickle
 
 # Claude model (sonnet balances cost/capability)
 # Options: opus, sonnet, haiku
 CLAUDE_MODEL=sonnet
 
-# Fallback model when primary hits rate limits (optional)
-# FALLBACK_MODEL=
+# OpenCode fallback model when primary hits rate limits (optional)
+# OC_FALL_MODEL=
 
 # ─────────────────────────────────────────────────────────────
 # Iteration Settings
@@ -138,8 +138,8 @@ fi
 [[ -n "$ENV_SLEEP_SECONDS" ]] && SLEEP_SECONDS="$ENV_SLEEP_SECONDS"
 [[ -n "$ENV_SKIP_COMMIT" ]] && SKIP_COMMIT="$ENV_SKIP_COMMIT"
 [[ -n "$ENV_CLAUDE_MODEL" ]] && CLAUDE_MODEL="$ENV_CLAUDE_MODEL"
-[[ -n "$ENV_OPENCODE_MODEL" ]] && OPENCODE_MODEL="$ENV_OPENCODE_MODEL"
-[[ -n "$ENV_FALLBACK_MODEL" ]] && FALLBACK_MODEL="$ENV_FALLBACK_MODEL"
+[[ -n "$ENV_OC_PRIME_MODEL" ]] && OC_PRIME_MODEL="$ENV_OC_PRIME_MODEL"
+[[ -n "$ENV_OC_FALL_MODEL" ]] && OC_FALL_MODEL="$ENV_OC_FALL_MODEL"
 [[ -n "$ENV_TEST_CMD" ]] && TEST_CMD="$ENV_TEST_CMD"
 [[ -n "$ENV_SKIP_TEST_VERIFY" ]] && SKIP_TEST_VERIFY="$ENV_SKIP_TEST_VERIFY"
 
@@ -151,7 +151,7 @@ MAX=${MAX_ITERATIONS:--1}
 SLEEP=${SLEEP_SECONDS:-2}
 
 # Track which model is currently active (for OpenCode fallback)
-CURRENT_OPENCODE_MODEL="$OPENCODE_MODEL"
+CURRENT_OC_PRIME_MODEL="$OC_PRIME_MODEL"
 USING_FALLBACK=0
 
 COMPLETE_MARKER="<promise>COMPLETE</promise>"
@@ -196,7 +196,7 @@ setup_logging() {
     if [[ "$ENGINE" == "claude" ]]; then
         echo "  Model: $CLAUDE_MODEL" >> "$LOG_FILE"
     else
-        echo "  Model: $OPENCODE_MODEL" >> "$LOG_FILE"
+        echo "  Model: $OC_PRIME_MODEL" >> "$LOG_FILE"
     fi
     echo "═══════════════════════════════════════════════════════════════" >> "$LOG_FILE"
 }
@@ -380,15 +380,15 @@ is_rate_limited() {
 }
 
 switch_to_fallback() {
-    if [[ -n "$FALLBACK_MODEL" && "$USING_FALLBACK" -eq 0 ]]; then
+    if [[ -n "$OC_FALL_MODEL" && "$USING_FALLBACK" -eq 0 ]]; then
         echo ""
         echo "==========================================="
-        echo "  Rate limit detected on $CURRENT_OPENCODE_MODEL"
-        echo "  Switching to fallback: $FALLBACK_MODEL"
+        echo "  Rate limit detected on $CURRENT_OC_PRIME_MODEL"
+        echo "  Switching to fallback: $OC_FALL_MODEL"
         echo "==========================================="
         echo ""
-        log "WARN" "Rate limit on $CURRENT_OPENCODE_MODEL, switching to $FALLBACK_MODEL"
-        CURRENT_OPENCODE_MODEL="$FALLBACK_MODEL"
+        log "WARN" "Rate limit on $CURRENT_OC_PRIME_MODEL, switching to $OC_FALL_MODEL"
+        CURRENT_OC_PRIME_MODEL="$OC_FALL_MODEL"
         USING_FALLBACK=1
         return 0
     fi
@@ -484,7 +484,7 @@ run_claude() {
 }
 
 run_opencode() {
-    opencode run --model "$CURRENT_OPENCODE_MODEL" "$PROMPT"
+    opencode run --model "$CURRENT_OC_PRIME_MODEL" "$PROMPT"
 }
 
 run_engine() {
@@ -515,8 +515,8 @@ fi
 if [[ "$ENGINE" == "claude" ]]; then
     echo "Using model: $CLAUDE_MODEL"
 else
-    echo "Using model: $OPENCODE_MODEL"
-    [[ -n "$FALLBACK_MODEL" ]] && echo "Fallback model: $FALLBACK_MODEL"
+    echo "Using model: $OC_PRIME_MODEL"
+    [[ -n "$OC_FALL_MODEL" ]] && echo "Fallback model: $OC_FALL_MODEL"
 fi
 
 [[ "$SKIP_COMMIT" == "1" ]] && echo "Commits disabled for this run"
@@ -549,7 +549,7 @@ while [[ "$MAX" -eq -1 ]] || [[ "$i" -lt "$MAX" ]]; do
     if [[ "$ENGINE" == "claude" ]]; then
         display_model="$CLAUDE_MODEL"
     else
-        display_model="$CURRENT_OPENCODE_MODEL"
+        display_model="$CURRENT_OC_PRIME_MODEL"
     fi
     
     if [[ "$MAX" -eq -1 ]]; then
