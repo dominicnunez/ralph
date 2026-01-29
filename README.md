@@ -89,7 +89,7 @@ Ralph uses a two-level config system:
 
 ```
 1. CLI arguments          (--model, --engine, etc.)
-2. Environment variables  (OPENCODE_MODEL, etc.)
+2. Environment variables  (OC_PRIME_MODEL, etc.)
 3. Project config         (.ralph/ralph.env)
 4. Global config          (~/.config/ralph/ralph.env)
 ```
@@ -100,7 +100,7 @@ Created automatically on `npm install -g sfs-cli` with sensible defaults:
 
 ```bash
 ENGINE=opencode
-OPENCODE_MODEL=big-pickle
+OC_PRIME_MODEL=big-pickle
 CLAUDE_MODEL=sonnet
 
 MAX_ITERATIONS=10
@@ -130,9 +130,9 @@ EOF
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `ENGINE` | `opencode` | AI engine: `opencode` or `claude` |
-| `OPENCODE_MODEL` | `big-pickle` | Model for OpenCode |
+| `OC_PRIME_MODEL` | `big-pickle` | Primary model for OpenCode |
 | `CLAUDE_MODEL` | `sonnet` | Model for Claude |
-| `FALLBACK_MODEL` | (none) | Fallback model for rate limits |
+| `OC_FALL_MODEL` | (none) | Fallback model for rate limits (OpenCode) |
 | `MAX_ITERATIONS` | `10` | Max iterations (-1 = infinite) |
 | `SLEEP_SECONDS` | `2` | Pause between iterations |
 | `SKIP_COMMIT` | `0` | Set to `1` to disable auto-commit |
@@ -202,7 +202,7 @@ This prevents the AI from marking tasks complete without actually writing tests.
 
 ### Rate Limit Handling (OpenCode)
 
-If a rate limit is detected and `FALLBACK_MODEL` is configured, Ralph automatically switches to the fallback model and retries.
+If a rate limit is detected and `OC_FALL_MODEL` is configured, Ralph automatically switches to the fallback model and retries.
 
 ## Exit Codes
 
