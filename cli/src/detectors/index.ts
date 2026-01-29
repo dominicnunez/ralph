@@ -15,3 +15,4 @@ export { DetectorRegistry, createRegistry } from "./registry.js";
 
 // Detectors
 export { NodejsDetector } from "./nodejs.js";
+export { PythonDetector } from "./python.js";
