@@ -78,40 +78,66 @@ sfs --help                 # Show all options
 
 ## Configuration
 
-Copy `ralph.env.example` to `ralph.env` to customize settings:
+Ralph uses a two-level config system:
 
-```bash
-# Engine selection: "opencode" or "claude"
-ENGINE=opencode
+| Location | Purpose |
+|----------|---------|
+| `~/.config/ralph/ralph.env` | Global defaults (created on install) |
+| `.ralph/ralph.env` | Project-specific overrides |
 
-# Model settings
-CLAUDE_MODEL=opus
-OPENCODE_MODEL=big-pickle
-# FALLBACK_MODEL=          # Optional fallback for rate limits
+### Config Priority
 
-# Iteration settings
-MAX_ITERATIONS=-1          # -1 for infinite
-SLEEP_SECONDS=2
-
-# Behavior
-SKIP_COMMIT=0
-SKIP_TEST_VERIFY=0
-
-# Test command (auto-detected if not set)
-TEST_CMD=
+```
+1. CLI arguments          (--model, --engine, etc.)
+2. Environment variables  (OPENCODE_MODEL, etc.)
+3. Project config         (.ralph/ralph.env)
+4. Global config          (~/.config/ralph/ralph.env)
 ```
 
-CLI arguments override config file settings.
+### Global Config
 
-### Defaults
+Created automatically on `npm install -g sfs-cli` with sensible defaults:
 
-| Setting | Default |
-|---------|---------|
-| `ENGINE` | `opencode` |
-| `OPENCODE_MODEL` | `big-pickle` |
-| `CLAUDE_MODEL` | `opus` |
-| `MAX_ITERATIONS` | `10` |
-| `SLEEP_SECONDS` | `2` |
+```bash
+ENGINE=opencode
+OPENCODE_MODEL=big-pickle
+CLAUDE_MODEL=sonnet
+
+MAX_ITERATIONS=-1
+SLEEP_SECONDS=2
+SKIP_COMMIT=0
+SKIP_TEST_VERIFY=0
+```
+
+### Project Config
+
+Create `.ralph/ralph.env` to override settings for a specific project:
+
+```bash
+mkdir -p .ralph
+cat > .ralph/ralph.env << 'EOF'
+# Use Claude for this project
+ENGINE=claude
+CLAUDE_MODEL=opus
+
+# Custom test command
+TEST_CMD="npm run test:ci"
+EOF
+```
+
+### Available Settings
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `ENGINE` | `opencode` | AI engine: `opencode` or `claude` |
+| `OPENCODE_MODEL` | `big-pickle` | Model for OpenCode |
+| `CLAUDE_MODEL` | `sonnet` | Model for Claude |
+| `FALLBACK_MODEL` | (none) | Fallback model for rate limits |
+| `MAX_ITERATIONS` | `-1` | Max iterations (-1 = infinite) |
+| `SLEEP_SECONDS` | `2` | Pause between iterations |
+| `SKIP_COMMIT` | `0` | Set to `1` to disable auto-commit |
+| `SKIP_TEST_VERIFY` | `0` | Set to `1` to skip test verification |
+| `TEST_CMD` | (auto) | Custom test command |
 
 ## Project Files
 
@@ -156,7 +182,7 @@ This prevents the AI from marking tasks complete without actually writing tests.
 | Engine | CLI | Default Model |
 |--------|-----|---------------|
 | OpenCode | `opencode` | `big-pickle` |
-| Claude | `claude` | `opus` |
+| Claude | `claude` | `sonnet` |
 
 ### Rate Limit Handling (OpenCode)
 
