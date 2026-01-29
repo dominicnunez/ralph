@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import { parseArgs, mergeOptions } from "./cli/args.js";
 import { loadConfig } from "./config/loader.js";
-import { runLoop } from "./cli/commands/run.js";
+import { runLoop, runSingleTask } from "./cli/commands/run.js";
 import { runInit } from "./cli/commands/init.js";
 import { logError } from "./ui/logger.js";
 
@@ -26,11 +26,18 @@ async function main(): Promise<void> {
     // Merge CLI options with config (CLI takes precedence)
     const finalConfig = mergeOptions(config, options);
 
-    // Run the main loop
-    await runLoop(finalConfig, {
+    const runOptions = {
       prdPath: options.prd || "PRD.md",
       verbose: options.verbose,
-    });
+    };
+
+    if (options.singleTask) {
+      await runSingleTask(finalConfig, runOptions, options.singleTask);
+      return;
+    }
+
+    // Run the main loop
+    await runLoop(finalConfig, runOptions);
   } catch (error) {
     logError(error instanceof Error ? error.message : String(error));
     process.exitCode = 1;

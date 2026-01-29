@@ -3,7 +3,7 @@ import type { Config } from "../../config/loader.js";
 import { getCurrentModel } from "../../config/loader.js";
 import { ClaudeEngine } from "../../engines/claude.js";
 import { OpenCodeEngine } from "../../engines/opencode.js";
-import { COMPLETE_MARKER, generatePrompt, type Engine } from "../../engines/base.js";
+import { COMPLETE_MARKER, generatePrompt, generateSingleTaskPrompt, type Engine } from "../../engines/base.js";
 import { parsePrd, getFirstIncompleteTask, countIncompleteTasks, allTasksComplete } from "../../tasks/parser.js";
 import { appendFailure, initProgress } from "../../tasks/progress.js";
 import { detectTestCommand, verify } from "../../tasks/verification.js";
@@ -238,4 +238,123 @@ export async function runLoop(config: Config, options: RunOptions): Promise<void
   console.log(`  Log: ${logFile}`);
   console.log(pc.yellow("==========================================="));
   process.exit(1);
+}
+
+export async function runSingleTask(
+  config: Config,
+  options: RunOptions,
+  task: string,
+  engineOverride?: Engine
+): Promise<void> {
+  const projectName = basename(process.cwd());
+  const logFile = join(config.logDir, `ralph-${projectName}.log`);
+
+  // Initialize
+  initLogger({ logFile, verbose: options.verbose });
+  initProgress();
+
+  // Create engine
+  const engine: Engine = engineOverride ?? (
+    config.engine === "claude"
+      ? new ClaudeEngine(config.claudeModel)
+      : new OpenCodeEngine(config.ocPrimeModel, config.ocFallModel)
+  );
+
+  // Verify engine is available
+  if (!engine.isAvailable()) {
+    logError(`'${engine.name}' command not found. Please install ${engine.name === "claude" ? "Claude CLI" : "OpenCode CLI"}.`);
+    process.exitCode = 1;
+    return;
+  }
+
+  // Detect test command
+  const testCmd = config.testCmd || detectTestCommand();
+
+  // Log session start
+  logSessionStart(projectName, config.engine, getCurrentModel(config));
+
+  // Print startup info
+  console.log(`Starting Ralph (${config.engine}) - Single task mode`);
+  console.log(`Using model: ${getCurrentModel(config)}`);
+
+  if (config.engine === "opencode" && config.ocFallModel) {
+    console.log(`Fallback model: ${config.ocFallModel}`);
+  }
+
+  if (config.skipCommit) {
+    console.log("Commits disabled for this run");
+  }
+
+  if (config.skipTestVerify) {
+    console.log(pc.yellow("  Test verification DISABLED"));
+    logWarning("Test verification disabled");
+  } else if (testCmd) {
+    console.log(`  Test command: ${testCmd}`);
+    logInfo(`Test command: ${testCmd}`);
+  } else {
+    console.log(pc.yellow("  No test command detected (configure TEST_CMD in ralph.env)"));
+    logWarning("No test command detected");
+  }
+
+  console.log(`  Log file: ${logFile}`);
+  console.log("");
+
+  // Generate prompt
+  const prompt = generateSingleTaskPrompt(task, config.skipCommit);
+
+  // Log iteration
+  logIteration(1, 1, task, engine.model);
+
+  // Run engine (single attempt with optional fallback)
+  let result = await engine.run(prompt);
+  logAiOutput(result.output);
+  console.log("");
+
+  if (!result.success && result.rateLimited && engine.switchToFallback?.()) {
+    result = await engine.run(prompt);
+    logAiOutput(result.output);
+    console.log("");
+  }
+
+  if (!result.success) {
+    logError(`${engine.name} failed with exit code ${result.exitCode}`);
+    process.exitCode = result.exitCode;
+    return;
+  }
+
+  // Test verification gate
+  if (!config.skipTestVerify && testCmd) {
+    const verification = verify(testCmd);
+
+    if (!verification.testsWritten) {
+      logWarning("No tests written, single task failed");
+      appendFailure(
+        1,
+        "No test files were created or modified",
+        "You MUST write tests before the task can be completed"
+      );
+      process.exitCode = 1;
+      return;
+    }
+
+    if (!verification.testsPassed) {
+      logWarning("Tests failed, single task failed");
+      appendFailure(
+        1,
+        "Tests failed",
+        "Fix the failing tests before marking the task complete"
+      );
+      process.exitCode = 1;
+      return;
+    }
+
+    logInfo("Verification passed");
+  }
+
+  logSuccess("Single task completed successfully!");
+  console.log(pc.green("==========================================="));
+  console.log(pc.green("  Single task iteration complete"));
+  console.log(pc.green("  All tests passing!"));
+  console.log(`  Log: ${logFile}`);
+  console.log(pc.green("==========================================="));
 }

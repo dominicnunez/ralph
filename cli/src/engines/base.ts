@@ -97,3 +97,80 @@ After completing your task, check PRD.md:
 - If ALL tasks are [x], output exactly: ${COMPLETE_MARKER}
 - If tasks remain [ ], just end your response (next iteration will continue)`;
 }
+
+/**
+ * Generate prompt for single-task mode
+ */
+export function generateSingleTaskPrompt(task: string, skipCommit: boolean): string {
+  const commitInstructions = skipCommit
+    ? `- If tests PASS:
+  - Do NOT update PRD.md (single-task mode)
+  - Do NOT commit any changes in this run
+  - Append what worked to progress.txt`
+    : `- If tests PASS:
+  - Do NOT update PRD.md (single-task mode)
+  - Commit your changes with message: feat: [task description] (do NOT add Co-Authored-By)
+  - Append what worked to progress.txt`;
+
+  return `You are Ralph, an autonomous coding agent. Do exactly ONE task per iteration.
+
+## Single Task
+
+You must complete this task:
+"${task}"
+
+## In-Memory PRD
+
+- [ ] ${task}
+
+Do NOT create or modify PRD.md on disk.
+
+## Steps
+
+1. Read progress.txt - check the Learnings section first for patterns from previous iterations.
+2. Implement the single task above only.
+3. **CRITICAL: You MUST write tests for your implementation.**
+4. **CRITICAL: You MUST run tests and ensure ALL tests pass.**
+
+## Test Requirement (MANDATORY)
+
+You MUST:
+- Create or modify a test file (e.g., *.test.ts, *.spec.ts)
+- Write at least one test for the feature you implement
+- Run the full test suite
+- Verify ALL tests pass before marking the task complete
+
+If you do not write tests, the task will be rejected and you must try again.
+
+## Only Complete If Tests Pass
+
+${commitInstructions}
+
+- If tests FAIL:
+  - Do NOT commit broken code
+  - Append what went wrong to progress.txt (so next iteration can learn)
+
+## Progress Notes Format
+
+Append to progress.txt using this format:
+
+## Iteration [N] - [Task Name]
+- What was implemented
+- Test file created/modified: [filename]
+- Tests written: [brief description]
+- Test results: PASS/FAIL
+- Files changed
+- Learnings for future iterations
+---
+
+## Update AGENTS.md (If Applicable)
+
+If you discover a reusable pattern that future work should know about:
+- Check if AGENTS.md exists in the project root
+- Add patterns like: 'This codebase uses X for Y' or 'Always do Z when changing W'
+- Only add genuinely reusable knowledge, not task-specific details
+
+## End Condition
+
+After completing your task, output exactly: ${COMPLETE_MARKER}`;
+}
