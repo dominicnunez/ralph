@@ -6,12 +6,12 @@ set -e
 # Supports both Claude Code and OpenCode engines
 # ─────────────────────────────────────────────────────────────
 
-# Determine script directory for config file location
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CONFIG_FILE="$SCRIPT_DIR/ralph.env"
-
 # Get project name from current directory
 PROJECT_NAME=$(basename "$(pwd)")
+
+# Config file locations (in priority order)
+PROJECT_CONFIG=".ralph/ralph.env"
+GLOBAL_CONFIG="$HOME/.config/ralph/ralph.env"
 
 # Log directory and file (external to project)
 LOG_DIR="${RALPH_LOG_DIR:-$HOME/.ralph/logs}"
@@ -38,11 +38,50 @@ ENV_TEST_CMD=${TEST_CMD-}
 ENV_SKIP_TEST_VERIFY=${SKIP_TEST_VERIFY-}
 
 # ─────────────────────────────────────────────────────────────
-# LOAD CONFIG FILE
+# DEFAULT CONFIG (for self-healing if global config missing)
 # ─────────────────────────────────────────────────────────────
 
-if [[ -f "$CONFIG_FILE" ]]; then
-    source "$CONFIG_FILE"
+DEFAULT_CONFIG_CONTENT='# Ralph Global Configuration
+# Created by ralph.sh (self-healing)
+#
+# Override per-project: .ralph/ralph.env
+# Docs: https://github.com/dominicnunez/ralph
+
+# Engine selection: "opencode" or "claude"
+ENGINE=opencode
+
+# Model settings
+OPENCODE_MODEL=big-pickle
+CLAUDE_MODEL=sonnet
+
+# Iteration settings
+MAX_ITERATIONS=-1
+SLEEP_SECONDS=2
+
+# Behavior
+SKIP_COMMIT=0
+SKIP_TEST_VERIFY=0
+'
+
+# ─────────────────────────────────────────────────────────────
+# ENSURE GLOBAL CONFIG EXISTS (self-healing)
+# ─────────────────────────────────────────────────────────────
+
+if [[ ! -f "$GLOBAL_CONFIG" ]]; then
+    mkdir -p "$(dirname "$GLOBAL_CONFIG")"
+    echo "$DEFAULT_CONFIG_CONTENT" > "$GLOBAL_CONFIG"
+fi
+
+# ─────────────────────────────────────────────────────────────
+# LOAD CONFIG FILES (global first, then project overrides)
+# ─────────────────────────────────────────────────────────────
+
+# Load global config
+source "$GLOBAL_CONFIG"
+
+# Load project config if exists (overrides global)
+if [[ -f "$PROJECT_CONFIG" ]]; then
+    source "$PROJECT_CONFIG"
 fi
 
 # ─────────────────────────────────────────────────────────────
@@ -60,21 +99,11 @@ fi
 [[ -n "$ENV_SKIP_TEST_VERIFY" ]] && SKIP_TEST_VERIFY="$ENV_SKIP_TEST_VERIFY"
 
 # ─────────────────────────────────────────────────────────────
-# SET DEFAULTS
+# APPLY SETTINGS (config values already loaded, just set aliases)
 # ─────────────────────────────────────────────────────────────
 
-ENGINE=${ENGINE:-opencode}
-MAX=${MAX_ITERATIONS:-10}
+MAX=${MAX_ITERATIONS:--1}
 SLEEP=${SLEEP_SECONDS:-2}
-SKIP_COMMIT=${SKIP_COMMIT:-0}
-SKIP_TEST_VERIFY=${SKIP_TEST_VERIFY:-0}
-
-# Claude defaults
-CLAUDE_MODEL=${CLAUDE_MODEL:-opus}
-
-# OpenCode defaults
-OPENCODE_MODEL=${OPENCODE_MODEL:-big-pickle}
-FALLBACK_MODEL=${FALLBACK_MODEL:-}
 
 # Track which model is currently active (for OpenCode fallback)
 CURRENT_OPENCODE_MODEL="$OPENCODE_MODEL"
