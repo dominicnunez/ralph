@@ -41,13 +41,13 @@ function generateBtcaInstructions(resources: string[]): string {
   if (resources.length === 0) {
     return `## Documentation Lookup (BTCA)
 
-When unsure about library APIs, patterns, or best practices, use btca to search real source code:
+When working with external libraries or frameworks, look up current APIs before writing code:
 
 \`\`\`bash
 btca ask -r <resource> -q "your question"
 \`\`\`
 
-Don't guess on APIs — look them up. This is faster than trial-and-error.`;
+Check the docs before writing — don't rely on training data.`;
   }
 
   const resourceList = resources.map(r => `@${r}`).join(", ");
@@ -55,19 +55,14 @@ Don't guess on APIs — look them up. This is faster than trial-and-error.`;
   
   return `## Documentation Lookup (BTCA)
 
-When unsure about library APIs, patterns, or best practices, use btca to search real source code.
-
-**Available resources for this project:** ${resourceList}
+When working with code that uses these libraries, look up current APIs:
+${resourceList}
 
 \`\`\`bash
-# Example usage
-btca ask -r ${exampleResource} -q "How does X work?"
-
-# Multiple resources
-btca ask -r ${resources.slice(0, 2).join(" -r ")} -q "your question"
+btca ask -r ${exampleResource} -q "how to do X"
 \`\`\`
 
-Don't guess on APIs — look them up. This is faster than trial-and-error.`;
+Check the docs before writing — don't rely on training data.`;
 }
 
 /**

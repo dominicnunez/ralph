@@ -11,6 +11,7 @@ describe("btca integration", () => {
     expect(prompt).toContain("Documentation Lookup (BTCA)");
     expect(prompt).toContain("@gin, @sqlx");
     expect(prompt).toContain("btca ask -r gin");
+    expect(prompt).toContain("don't rely on training data");
   });
 
   test("generatePrompt includes btca without resources", () => {
@@ -21,6 +22,7 @@ describe("btca integration", () => {
     });
     expect(prompt).toContain("Documentation Lookup (BTCA)");
     expect(prompt).toContain("btca ask -r <resource>");
+    expect(prompt).toContain("don't rely on training data");
   });
 
   test("generatePrompt excludes btca when disabled", () => {
@@ -40,5 +42,6 @@ describe("btca integration", () => {
     });
     expect(prompt).toContain("Documentation Lookup (BTCA)");
     expect(prompt).toContain("@svelte");
+    expect(prompt).toContain("don't rely on training data");
   });
 });
