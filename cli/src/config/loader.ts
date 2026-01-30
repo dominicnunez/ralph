@@ -26,6 +26,10 @@ export interface Config {
 
   // Logging
   logDir: string;
+
+  // BTCA (Better Context App)
+  btcaEnabled: boolean;
+  btcaResources: string[];
 }
 
 // Config file paths
@@ -101,6 +105,20 @@ SKIP_TEST_VERIFY=0
 # Default: ~/.ralph/logs
 # Logs are named: ralph-<projectname>.log
 # RALPH_LOG_DIR=
+
+# ─────────────────────────────────────────────────────────────
+# BTCA (Better Context App) Settings
+# ─────────────────────────────────────────────────────────────
+
+# Enable btca for documentation lookups (1 = enabled)
+# When enabled, Ralph will be instructed to use btca for API/library questions
+BTCA_ENABLED=0
+
+# Comma-separated list of btca resources for this project
+# These are passed to the agent in the prompt
+# Use resources from btca.dev/resources or custom git repos
+# Examples: "svelte,sveltekit,tailwind" or "gin,sqlx,go"
+# BTCA_RESOURCES=
 `;
 
 /**
@@ -183,6 +201,16 @@ function applyEnvToConfig(config: Config, env: Record<string, string>): void {
   if (env.RALPH_LOG_DIR && env.RALPH_LOG_DIR.trim()) {
     config.logDir = env.RALPH_LOG_DIR;
   }
+
+  // BTCA
+  if (env.BTCA_ENABLED === "1" || env.BTCA_ENABLED === "true") {
+    config.btcaEnabled = true;
+  } else if (env.BTCA_ENABLED === "0" || env.BTCA_ENABLED === "false") {
+    config.btcaEnabled = false;
+  }
+  if (env.BTCA_RESOURCES && env.BTCA_RESOURCES.trim()) {
+    config.btcaResources = env.BTCA_RESOURCES.split(",").map(r => r.trim()).filter(r => r);
+  }
 }
 
 /**
@@ -220,6 +248,8 @@ export function loadConfig(): Config {
     testCmd: undefined,
     skipTestVerify: false,
     logDir: join(homedir(), ".ralph", "logs"),
+    btcaEnabled: false,
+    btcaResources: [],
   };
 
   // Load global config (always exists due to self-healing)
@@ -247,6 +277,8 @@ export function loadConfig(): Config {
   if (process.env.TEST_CMD) processEnv.TEST_CMD = process.env.TEST_CMD;
   if (process.env.SKIP_TEST_VERIFY) processEnv.SKIP_TEST_VERIFY = process.env.SKIP_TEST_VERIFY;
   if (process.env.RALPH_LOG_DIR) processEnv.RALPH_LOG_DIR = process.env.RALPH_LOG_DIR;
+  if (process.env.BTCA_ENABLED) processEnv.BTCA_ENABLED = process.env.BTCA_ENABLED;
+  if (process.env.BTCA_RESOURCES) processEnv.BTCA_RESOURCES = process.env.BTCA_RESOURCES;
   
   applyEnvToConfig(config, processEnv);
 

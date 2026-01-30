@@ -83,7 +83,11 @@ export async function runLoop(config: Config, options: RunOptions): Promise<void
   console.log("");
 
   // Generate prompt
-  const prompt = generatePrompt(config.skipCommit);
+  const prompt = generatePrompt({
+    skipCommit: config.skipCommit,
+    btcaEnabled: config.btcaEnabled,
+    btcaResources: config.btcaResources,
+  });
   
   // Main loop
   let iteration = 0;
@@ -300,7 +304,11 @@ export async function runSingleTask(
   console.log("");
 
   // Generate prompt
-  const prompt = generateSingleTaskPrompt(task, config.skipCommit);
+  const prompt = generateSingleTaskPrompt(task, {
+    skipCommit: config.skipCommit,
+    btcaEnabled: config.btcaEnabled,
+    btcaResources: config.btcaResources,
+  });
 
   // Log iteration
   logIteration(1, 1, task, engine.model);

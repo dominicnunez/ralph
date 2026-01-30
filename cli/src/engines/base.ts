@@ -28,10 +28,53 @@ export interface Engine {
 
 export const COMPLETE_MARKER = "<promise>COMPLETE</promise>";
 
+export interface PromptOptions {
+  skipCommit: boolean;
+  btcaEnabled?: boolean;
+  btcaResources?: string[];
+}
+
+/**
+ * Generate btca instructions if enabled
+ */
+function generateBtcaInstructions(resources: string[]): string {
+  if (resources.length === 0) {
+    return `## Documentation Lookup (BTCA)
+
+When unsure about library APIs, patterns, or best practices, use btca to search real source code:
+
+\`\`\`bash
+btca ask -r <resource> -q "your question"
+\`\`\`
+
+Don't guess on APIs — look them up. This is faster than trial-and-error.`;
+  }
+
+  const resourceList = resources.map(r => `@${r}`).join(", ");
+  const exampleResource = resources[0];
+  
+  return `## Documentation Lookup (BTCA)
+
+When unsure about library APIs, patterns, or best practices, use btca to search real source code.
+
+**Available resources for this project:** ${resourceList}
+
+\`\`\`bash
+# Example usage
+btca ask -r ${exampleResource} -q "How does X work?"
+
+# Multiple resources
+btca ask -r ${resources.slice(0, 2).join(" -r ")} -q "your question"
+\`\`\`
+
+Don't guess on APIs — look them up. This is faster than trial-and-error.`;
+}
+
 /**
  * Generate the standard prompt for Ralph
  */
-export function generatePrompt(skipCommit: boolean): string {
+export function generatePrompt(options: PromptOptions): string {
+  const { skipCommit, btcaEnabled, btcaResources } = options;
   const commitInstructions = skipCommit
     ? `- If tests PASS:
   - Update PRD.md to mark the task complete (change [ ] to [x])
@@ -90,7 +133,7 @@ If you discover a reusable pattern that future work should know about:
 - Check if AGENTS.md exists in the project root
 - Add patterns like: 'This codebase uses X for Y' or 'Always do Z when changing W'
 - Only add genuinely reusable knowledge, not task-specific details
-
+${btcaEnabled ? `\n${generateBtcaInstructions(btcaResources || [])}` : ""}
 ## End Condition
 
 After completing your task, check PRD.md:
@@ -101,7 +144,8 @@ After completing your task, check PRD.md:
 /**
  * Generate prompt for single-task mode
  */
-export function generateSingleTaskPrompt(task: string, skipCommit: boolean): string {
+export function generateSingleTaskPrompt(task: string, options: PromptOptions): string {
+  const { skipCommit, btcaEnabled, btcaResources } = options;
   const commitInstructions = skipCommit
     ? `- If tests PASS:
   - Do NOT update PRD.md (single-task mode)
@@ -169,7 +213,7 @@ If you discover a reusable pattern that future work should know about:
 - Check if AGENTS.md exists in the project root
 - Add patterns like: 'This codebase uses X for Y' or 'Always do Z when changing W'
 - Only add genuinely reusable knowledge, not task-specific details
-
+${btcaEnabled ? `\n${generateBtcaInstructions(btcaResources || [])}` : ""}
 ## End Condition
 
 After completing your task, output exactly: ${COMPLETE_MARKER}`;
