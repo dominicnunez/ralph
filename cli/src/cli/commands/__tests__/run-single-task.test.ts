@@ -35,7 +35,10 @@ describe("single task mode", () => {
   });
 
   test("generateSingleTaskPrompt includes in-memory PRD instructions", () => {
-    const prompt = generateSingleTaskPrompt("ship a toaster", { skipCommit: true });
+    const prompt = generateSingleTaskPrompt("ship a toaster", { 
+      skipCommit: true,
+      progressFile: "/tmp/progress.log"
+    });
     expect(prompt).toContain("In-Memory PRD");
     expect(prompt).toContain("Do NOT create or modify PRD.md on disk.");
     expect(prompt).toContain("ship a toaster");
@@ -54,6 +57,7 @@ describe("single task mode", () => {
       testCmd: undefined,
       skipTestVerify: true,
       logDir: join(tempRoot, "logs"),
+      progressDir: join(tempRoot, "progress"),
       btcaEnabled: false,
       btcaResources: [],
     };

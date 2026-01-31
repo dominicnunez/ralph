@@ -5,7 +5,7 @@ import { ClaudeEngine } from "../../engines/claude.js";
 import { OpenCodeEngine } from "../../engines/opencode.js";
 import { COMPLETE_MARKER, generatePrompt, generateSingleTaskPrompt, type Engine } from "../../engines/base.js";
 import { parsePrd, getFirstIncompleteTask, countIncompleteTasks, allTasksComplete } from "../../tasks/parser.js";
-import { appendFailure, initProgress } from "../../tasks/progress.js";
+import { appendFailure, initProgress, getProgressFile } from "../../tasks/progress.js";
 import { detectTestCommand, verify } from "../../tasks/verification.js";
 import {
   initLogger,
@@ -33,10 +33,11 @@ function sleep(seconds: number): Promise<void> {
 export async function runLoop(config: Config, options: RunOptions): Promise<void> {
   const projectName = basename(process.cwd());
   const logFile = join(config.logDir, `ralph-${projectName}.log`);
+  const progressFile = getProgressFile(projectName, config.progressDir);
   
   // Initialize
   initLogger({ logFile, verbose: options.verbose });
-  initProgress();
+  initProgress(config.progressDir, progressFile);
   
   // Create engine
   const engine: Engine = config.engine === "claude"
@@ -87,6 +88,7 @@ export async function runLoop(config: Config, options: RunOptions): Promise<void
     skipCommit: config.skipCommit,
     btcaEnabled: config.btcaEnabled,
     btcaResources: config.btcaResources,
+    progressFile,
   });
   
   // Main loop
@@ -139,6 +141,7 @@ export async function runLoop(config: Config, options: RunOptions): Promise<void
         logWarning(`No tests written, iteration failed (${consecutiveFailures}/${MAX_CONSECUTIVE_FAILURES})`);
         
         appendFailure(
+          progressFile,
           iteration,
           "No test files were created or modified",
           "You MUST write tests before the task can be completed"
@@ -163,6 +166,7 @@ export async function runLoop(config: Config, options: RunOptions): Promise<void
         logWarning(`Tests failed, iteration failed (${consecutiveFailures}/${MAX_CONSECUTIVE_FAILURES})`);
         
         appendFailure(
+          progressFile,
           iteration,
           "Tests failed",
           "Fix the failing tests before marking the task complete"
@@ -252,10 +256,11 @@ export async function runSingleTask(
 ): Promise<void> {
   const projectName = basename(process.cwd());
   const logFile = join(config.logDir, `ralph-${projectName}.log`);
+  const progressFile = getProgressFile(projectName, config.progressDir);
 
   // Initialize
   initLogger({ logFile, verbose: options.verbose });
-  initProgress();
+  initProgress(config.progressDir, progressFile);
 
   // Create engine
   const engine: Engine = engineOverride ?? (
@@ -308,6 +313,7 @@ export async function runSingleTask(
     skipCommit: config.skipCommit,
     btcaEnabled: config.btcaEnabled,
     btcaResources: config.btcaResources,
+    progressFile,
   });
 
   // Log iteration
@@ -337,6 +343,7 @@ export async function runSingleTask(
     if (!verification.testsWritten) {
       logWarning("No tests written, single task failed");
       appendFailure(
+        progressFile,
         1,
         "No test files were created or modified",
         "You MUST write tests before the task can be completed"
@@ -348,6 +355,7 @@ export async function runSingleTask(
     if (!verification.testsPassed) {
       logWarning("Tests failed, single task failed");
       appendFailure(
+        progressFile,
         1,
         "Tests failed",
         "Fix the failing tests before marking the task complete"

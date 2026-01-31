@@ -32,6 +32,7 @@ export interface PromptOptions {
   skipCommit: boolean;
   btcaEnabled?: boolean;
   btcaResources?: string[];
+  progressFile: string;
 }
 
 /**
@@ -69,23 +70,23 @@ Check the docs before writing — don't rely on training data.`;
  * Generate the standard prompt for Ralph
  */
 export function generatePrompt(options: PromptOptions): string {
-  const { skipCommit, btcaEnabled, btcaResources } = options;
+  const { skipCommit, btcaEnabled, btcaResources, progressFile } = options;
   const commitInstructions = skipCommit
     ? `- If tests PASS:
   - Update PRD.md to mark the task complete (change [ ] to [x])
   - Do NOT commit any changes in this run
-  - Append what worked to progress.txt`
+  - Append what worked to ${progressFile}`
     : `- If tests PASS:
   - Update PRD.md to mark the task complete (change [ ] to [x])
   - Commit your changes with message: feat: [task description] (do NOT add Co-Authored-By)
-  - Append what worked to progress.txt`;
+  - Append what worked to ${progressFile}`;
 
   return `You are Ralph, an autonomous coding agent. Do exactly ONE task per iteration.
 
 ## Steps
 
 1. Read PRD.md and find the first task that is NOT complete (marked [ ]).
-2. Read progress.txt - check the Learnings section first for patterns from previous iterations.
+2. Read ${progressFile} - check the Learnings section first for patterns from previous iterations.
 3. Implement that ONE task only.
 4. **CRITICAL: You MUST write tests for your implementation.**
 5. **CRITICAL: You MUST run tests and ensure ALL tests pass.**
@@ -107,11 +108,11 @@ ${commitInstructions}
 - If tests FAIL:
   - Do NOT mark the task complete
   - Do NOT commit broken code
-  - Append what went wrong to progress.txt (so next iteration can learn)
+  - Append what went wrong to ${progressFile} (so next iteration can learn)
 
 ## Progress Notes Format
 
-Append to progress.txt using this format:
+Append to ${progressFile} using this format:
 
 ## Iteration [N] - [Task Name]
 - What was implemented
@@ -140,16 +141,16 @@ After completing your task, check PRD.md:
  * Generate prompt for single-task mode
  */
 export function generateSingleTaskPrompt(task: string, options: PromptOptions): string {
-  const { skipCommit, btcaEnabled, btcaResources } = options;
+  const { skipCommit, btcaEnabled, btcaResources, progressFile } = options;
   const commitInstructions = skipCommit
     ? `- If tests PASS:
   - Do NOT update PRD.md (single-task mode)
   - Do NOT commit any changes in this run
-  - Append what worked to progress.txt`
+  - Append what worked to ${progressFile}`
     : `- If tests PASS:
   - Do NOT update PRD.md (single-task mode)
   - Commit your changes with message: feat: [task description] (do NOT add Co-Authored-By)
-  - Append what worked to progress.txt`;
+  - Append what worked to ${progressFile}`;
 
   return `You are Ralph, an autonomous coding agent. Do exactly ONE task per iteration.
 
@@ -166,7 +167,7 @@ Do NOT create or modify PRD.md on disk.
 
 ## Steps
 
-1. Read progress.txt - check the Learnings section first for patterns from previous iterations.
+1. Read ${progressFile} - check the Learnings section first for patterns from previous iterations.
 2. Implement the single task above only.
 3. **CRITICAL: You MUST write tests for your implementation.**
 4. **CRITICAL: You MUST run tests and ensure ALL tests pass.**
@@ -187,11 +188,11 @@ ${commitInstructions}
 
 - If tests FAIL:
   - Do NOT commit broken code
-  - Append what went wrong to progress.txt (so next iteration can learn)
+  - Append what went wrong to ${progressFile} (so next iteration can learn)
 
 ## Progress Notes Format
 
-Append to progress.txt using this format:
+Append to ${progressFile} using this format:
 
 ## Iteration [N] - [Task Name]
 - What was implemented

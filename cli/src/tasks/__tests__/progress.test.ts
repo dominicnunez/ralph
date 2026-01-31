@@ -7,49 +7,60 @@ import {
   appendProgress,
   appendFailure,
   initProgress,
+  getProgressFile,
   type IterationResult,
 } from "../progress.js";
 
 describe("tasks/progress", () => {
   let tempDir: string;
-  let originalCwd: string;
+  let progressDir: string;
+  let progressFile: string;
+  const projectName = "test-project";
 
   beforeEach(() => {
-    originalCwd = process.cwd();
     tempDir = mkdtempSync(join(tmpdir(), "ralph-progress-test-"));
-    process.chdir(tempDir);
+    progressDir = join(tempDir, "progress");
+    progressFile = getProgressFile(projectName, progressDir);
   });
 
   afterEach(() => {
-    process.chdir(originalCwd);
     rmSync(tempDir, { recursive: true, force: true });
   });
 
+  describe("getProgressFile", () => {
+    test("constructs correct path", () => {
+      const result = getProgressFile("my-app", "/home/user/.ralph/progress");
+      expect(result).toBe("/home/user/.ralph/progress/progress-my-app.log");
+    });
+  });
+
   describe("initProgress", () => {
-    test("creates progress.txt if it doesn't exist", () => {
-      expect(existsSync("progress.txt")).toBe(false);
-      initProgress();
-      expect(existsSync("progress.txt")).toBe(true);
+    test("creates progress directory and file if they don't exist", () => {
+      expect(existsSync(progressDir)).toBe(false);
+      expect(existsSync(progressFile)).toBe(false);
+      initProgress(progressDir, progressFile);
+      expect(existsSync(progressDir)).toBe(true);
+      expect(existsSync(progressFile)).toBe(true);
     });
 
     test("initializes with header", () => {
-      initProgress();
-      const content = readFileSync("progress.txt", "utf-8");
+      initProgress(progressDir, progressFile);
+      const content = readFileSync(progressFile, "utf-8");
       expect(content).toBe("# Progress Log\n\n");
     });
 
     test("does not overwrite existing file", () => {
-      initProgress();
-      appendProgress({
+      initProgress(progressDir, progressFile);
+      appendProgress(progressFile, {
         iteration: 1,
         taskName: "Test task",
         success: true,
         message: "Done",
       });
-      const contentBefore = readFileSync("progress.txt", "utf-8");
+      const contentBefore = readFileSync(progressFile, "utf-8");
       
-      initProgress();
-      const contentAfter = readFileSync("progress.txt", "utf-8");
+      initProgress(progressDir, progressFile);
+      const contentAfter = readFileSync(progressFile, "utf-8");
       
       expect(contentAfter).toBe(contentBefore);
     });
@@ -57,18 +68,18 @@ describe("tasks/progress", () => {
 
   describe("readProgress", () => {
     test("returns empty string for non-existent file", () => {
-      expect(readProgress()).toBe("");
+      expect(readProgress(progressFile)).toBe("");
     });
 
     test("returns file content", () => {
-      initProgress();
-      expect(readProgress()).toBe("# Progress Log\n\n");
+      initProgress(progressDir, progressFile);
+      expect(readProgress(progressFile)).toBe("# Progress Log\n\n");
     });
   });
 
   describe("appendProgress", () => {
     test("appends successful iteration", () => {
-      initProgress();
+      initProgress(progressDir, progressFile);
       const result: IterationResult = {
         iteration: 1,
         taskName: "Add feature X",
@@ -76,8 +87,8 @@ describe("tasks/progress", () => {
         message: "Feature implemented successfully",
       };
       
-      appendProgress(result);
-      const content = readProgress();
+      appendProgress(progressFile, result);
+      const content = readProgress(progressFile);
       
       expect(content).toContain("## Iteration 1 - Add feature X");
       expect(content).toContain("Status: SUCCESS");
@@ -85,7 +96,7 @@ describe("tasks/progress", () => {
     });
 
     test("appends failed iteration", () => {
-      initProgress();
+      initProgress(progressDir, progressFile);
       const result: IterationResult = {
         iteration: 2,
         taskName: "Fix bug Y",
@@ -93,8 +104,8 @@ describe("tasks/progress", () => {
         message: "Tests still failing",
       };
       
-      appendProgress(result);
-      const content = readProgress();
+      appendProgress(progressFile, result);
+      const content = readProgress(progressFile);
       
       expect(content).toContain("## Iteration 2 - Fix bug Y");
       expect(content).toContain("Status: FAILED");
@@ -102,7 +113,7 @@ describe("tasks/progress", () => {
     });
 
     test("includes test file when provided", () => {
-      initProgress();
+      initProgress(progressDir, progressFile);
       const result: IterationResult = {
         iteration: 1,
         taskName: "Add tests",
@@ -111,14 +122,14 @@ describe("tasks/progress", () => {
         testFile: "src/__tests__/feature.test.ts",
       };
       
-      appendProgress(result);
-      const content = readProgress();
+      appendProgress(progressFile, result);
+      const content = readProgress(progressFile);
       
       expect(content).toContain("Test file: src/__tests__/feature.test.ts");
     });
 
     test("includes files changed when provided", () => {
-      initProgress();
+      initProgress(progressDir, progressFile);
       const result: IterationResult = {
         iteration: 1,
         taskName: "Refactor",
@@ -127,30 +138,30 @@ describe("tasks/progress", () => {
         filesChanged: ["src/a.ts", "src/b.ts", "src/c.ts"],
       };
       
-      appendProgress(result);
-      const content = readProgress();
+      appendProgress(progressFile, result);
+      const content = readProgress(progressFile);
       
       expect(content).toContain("Files changed: src/a.ts, src/b.ts, src/c.ts");
     });
 
     test("appends multiple iterations in order", () => {
-      initProgress();
+      initProgress(progressDir, progressFile);
       
-      appendProgress({
+      appendProgress(progressFile, {
         iteration: 1,
         taskName: "Task 1",
         success: true,
         message: "Done 1",
       });
       
-      appendProgress({
+      appendProgress(progressFile, {
         iteration: 2,
         taskName: "Task 2",
         success: true,
         message: "Done 2",
       });
       
-      const content = readProgress();
+      const content = readProgress(progressFile);
       const idx1 = content.indexOf("Iteration 1");
       const idx2 = content.indexOf("Iteration 2");
       
@@ -160,29 +171,29 @@ describe("tasks/progress", () => {
 
   describe("appendFailure", () => {
     test("appends failure with reason", () => {
-      initProgress();
-      appendFailure(3, "Tests did not pass");
+      initProgress(progressDir, progressFile);
+      appendFailure(progressFile, 3, "Tests did not pass");
       
-      const content = readProgress();
+      const content = readProgress(progressFile);
       expect(content).toContain("## FAILED - Iteration 3");
       expect(content).toContain("Reason: Tests did not pass");
     });
 
     test("includes details when provided", () => {
-      initProgress();
-      appendFailure(4, "Build failed", "Missing dependency: lodash");
+      initProgress(progressDir, progressFile);
+      appendFailure(progressFile, 4, "Build failed", "Missing dependency: lodash");
       
-      const content = readProgress();
+      const content = readProgress(progressFile);
       expect(content).toContain("## FAILED - Iteration 4");
       expect(content).toContain("Reason: Build failed");
       expect(content).toContain("Details: Missing dependency: lodash");
     });
 
     test("omits details line when not provided", () => {
-      initProgress();
-      appendFailure(5, "Unknown error");
+      initProgress(progressDir, progressFile);
+      appendFailure(progressFile, 5, "Unknown error");
       
-      const content = readProgress();
+      const content = readProgress(progressFile);
       expect(content).toContain("Reason: Unknown error");
       expect(content).not.toContain("Details:");
     });

@@ -1,6 +1,5 @@
-import { existsSync, readFileSync, appendFileSync, writeFileSync } from "node:fs";
-
-const PROGRESS_FILE = "progress.txt";
+import { existsSync, readFileSync, appendFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { join } from "node:path";
 
 export interface IterationResult {
   iteration: number;
@@ -12,27 +11,34 @@ export interface IterationResult {
 }
 
 /**
+ * Get the progress file path for a project
+ */
+export function getProgressFile(projectName: string, progressDir: string): string {
+  return join(progressDir, `progress-${projectName}.log`);
+}
+
+/**
  * Read the progress file content
  */
-export function readProgress(): string {
-  if (!existsSync(PROGRESS_FILE)) {
+export function readProgress(progressFile: string): string {
+  if (!existsSync(progressFile)) {
     return "";
   }
-  return readFileSync(PROGRESS_FILE, "utf-8");
+  return readFileSync(progressFile, "utf-8");
 }
 
 /**
- * Append an iteration result to progress.txt
+ * Append an iteration result to the progress file
  */
-export function appendProgress(result: IterationResult): void {
+export function appendProgress(progressFile: string, result: IterationResult): void {
   const entry = formatProgressEntry(result);
-  appendFileSync(PROGRESS_FILE, entry);
+  appendFileSync(progressFile, entry);
 }
 
 /**
- * Append a failure message to progress.txt
+ * Append a failure message to the progress file
  */
-export function appendFailure(iteration: number, reason: string, details?: string): void {
+export function appendFailure(progressFile: string, iteration: number, reason: string, details?: string): void {
   const entry = [
     "",
     `## FAILED - Iteration ${iteration}`,
@@ -42,7 +48,7 @@ export function appendFailure(iteration: number, reason: string, details?: strin
     "",
   ].filter(Boolean).join("\n");
   
-  appendFileSync(PROGRESS_FILE, entry);
+  appendFileSync(progressFile, entry);
 }
 
 /**
@@ -71,10 +77,16 @@ function formatProgressEntry(result: IterationResult): string {
 }
 
 /**
- * Initialize progress file if it doesn't exist
+ * Initialize progress directory and file if they don't exist
  */
-export function initProgress(): void {
-  if (!existsSync(PROGRESS_FILE)) {
-    writeFileSync(PROGRESS_FILE, "# Progress Log\n\n");
+export function initProgress(progressDir: string, progressFile: string): void {
+  // Create directory if it doesn't exist
+  if (!existsSync(progressDir)) {
+    mkdirSync(progressDir, { recursive: true });
+  }
+  
+  // Create file if it doesn't exist
+  if (!existsSync(progressFile)) {
+    writeFileSync(progressFile, "# Progress Log\n\n");
   }
 }

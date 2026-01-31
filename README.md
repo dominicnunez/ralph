@@ -33,7 +33,7 @@ Both versions have identical features.
 Ralph runs an AI coding assistant in a loop, feeding it tasks from a PRD (Product Requirements Document) and tracking progress across iterations. Each iteration:
 
 1. Reads `PRD.md` to find the first incomplete task
-2. Reads `progress.txt` to learn from previous iterations
+2. Reads progress file from `~/.ralph/progress/` to learn from previous iterations
 3. Implements exactly ONE task
 4. **Verifies test files were created/modified**
 5. **Runs tests to verify the implementation**
@@ -160,7 +160,7 @@ If auto-detection fails or you need a custom command, set `TEST_CMD` in your con
 | File | Description |
 |------|-------------|
 | `PRD.md` | Task list with checkbox format (required) |
-| `progress.txt` | Created automatically to track learnings across iterations |
+| `~/.ralph/progress/progress-<project>.log` | Centralized progress tracking across iterations |
 | `AGENTS.md` | Reusable patterns for the codebase (optional) |
 
 ## Key Features
@@ -169,7 +169,7 @@ If auto-detection fails or you need a custom command, set `TEST_CMD` in your con
 - **Enforced test writing** - Verifies test files were actually created/modified
 - **Test-gated completion** - Runs test suite after each iteration, blocks progress on failure
 - **Double verification** - PRD.md check + final test suite before declaring complete
-- **Progress persistence** - Learnings survive across iterations (progress.txt)
+- **Progress persistence** - Learnings survive across iterations in `~/.ralph/progress/`
 - **External logging** - Per-project logs at `~/.ralph/logs/ralph-<project>.log`
 - **Auto-commit** - Commits changes automatically with descriptive messages
 - **Automatic fallback** - Switches to fallback model on rate limits (OpenCode)

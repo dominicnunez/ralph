@@ -27,6 +27,9 @@ export interface Config {
   // Logging
   logDir: string;
 
+  // Progress
+  progressDir: string;
+
   // BTCA (Better Context App)
   btcaEnabled: boolean;
   btcaResources: string[];
@@ -105,6 +108,11 @@ SKIP_TEST_VERIFY=0
 # Default: ~/.ralph/logs
 # Logs are named: ralph-<projectname>.log
 # RALPH_LOG_DIR=
+
+# Progress directory for Ralph progress tracking
+# Default: ~/.ralph/progress
+# Progress files are named: progress-<projectname>.log
+# RALPH_PROGRESS_DIR=
 
 # ─────────────────────────────────────────────────────────────
 # BTCA (Better Context App) Settings
@@ -202,6 +210,11 @@ function applyEnvToConfig(config: Config, env: Record<string, string>): void {
     config.logDir = env.RALPH_LOG_DIR;
   }
 
+  // Progress
+  if (env.RALPH_PROGRESS_DIR && env.RALPH_PROGRESS_DIR.trim()) {
+    config.progressDir = env.RALPH_PROGRESS_DIR;
+  }
+
   // BTCA
   if (env.BTCA_ENABLED === "1" || env.BTCA_ENABLED === "true") {
     config.btcaEnabled = true;
@@ -248,6 +261,7 @@ export function loadConfig(): Config {
     testCmd: undefined,
     skipTestVerify: false,
     logDir: join(homedir(), ".ralph", "logs"),
+    progressDir: join(homedir(), ".ralph", "progress"),
     btcaEnabled: false,
     btcaResources: [],
   };
@@ -277,6 +291,7 @@ export function loadConfig(): Config {
   if (process.env.TEST_CMD) processEnv.TEST_CMD = process.env.TEST_CMD;
   if (process.env.SKIP_TEST_VERIFY) processEnv.SKIP_TEST_VERIFY = process.env.SKIP_TEST_VERIFY;
   if (process.env.RALPH_LOG_DIR) processEnv.RALPH_LOG_DIR = process.env.RALPH_LOG_DIR;
+  if (process.env.RALPH_PROGRESS_DIR) processEnv.RALPH_PROGRESS_DIR = process.env.RALPH_PROGRESS_DIR;
   if (process.env.BTCA_ENABLED) processEnv.BTCA_ENABLED = process.env.BTCA_ENABLED;
   if (process.env.BTCA_RESOURCES) processEnv.BTCA_RESOURCES = process.env.BTCA_RESOURCES;
   
