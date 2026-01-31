@@ -571,6 +571,102 @@ describe("ralph.sh script", () => {
     });
   });
 
+  describe("is_rate_limited function", () => {
+    const content = readFileSync(ralphPath, "utf-8");
+    
+    // Extract the is_rate_limited function from ralph.sh for testing
+    const extractFunction = (): string => {
+      const funcMatch = content.match(/is_rate_limited\s*\(\)\s*\{[^}]+\}/);
+      if (!funcMatch) throw new Error("Could not extract is_rate_limited function");
+      return funcMatch[0];
+    };
+
+    // Helper to test if a message triggers rate limit detection
+    const testRateLimited = (message: string): boolean => {
+      const func = extractFunction();
+      const result = spawnSync(
+        "bash",
+        ["-c", `${func}\nis_rate_limited "${message}"`],
+        { encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] }
+      );
+      return result.status === 0;
+    };
+
+    test("detects 'rate limit' in output", () => {
+      expect(testRateLimited("rate limit exceeded")).toBe(true);
+    });
+
+    test("detects 'rate-limit' with hyphen in output", () => {
+      expect(testRateLimited("Error: rate-limit hit")).toBe(true);
+    });
+
+    test("detects 'quota' in output", () => {
+      expect(testRateLimited("quota exceeded")).toBe(true);
+    });
+
+    test("detects '429' error code in output", () => {
+      expect(testRateLimited("HTTP 429 Too Many Requests")).toBe(true);
+    });
+
+    test("detects 'too many requests' in output", () => {
+      expect(testRateLimited("Error: too many requests")).toBe(true);
+    });
+
+    test("detects 'too-many-requests' with hyphens in output", () => {
+      expect(testRateLimited("Error: too-many-requests")).toBe(true);
+    });
+
+    test("detects 'exhausted' in output", () => {
+      expect(testRateLimited("API credits exhausted")).toBe(true);
+    });
+
+    test("detects 'overloaded' in output", () => {
+      expect(testRateLimited("Server is overloaded")).toBe(true);
+    });
+
+    test("detects 'capacity' in output", () => {
+      expect(testRateLimited("Server at capacity")).toBe(true);
+    });
+
+    test("detects 'not included' (Usage not included in your plan) in output", () => {
+      expect(testRateLimited("Usage not included in your plan")).toBe(true);
+    });
+
+    test("detects 'not-included' with hyphen in output", () => {
+      expect(testRateLimited("Error: not-included-in-plan")).toBe(true);
+    });
+
+    test("returns false for normal output without rate limit indicators", () => {
+      expect(testRateLimited("Task completed successfully")).toBe(false);
+    });
+
+    test("is case-insensitive (detects RATE LIMIT, Rate Limit, etc.)", () => {
+      expect(testRateLimited("RATE LIMIT exceeded")).toBe(true);
+      expect(testRateLimited("NOT INCLUDED in plan")).toBe(true);
+    });
+
+    test("grep regex includes 'not.?included' pattern", () => {
+      // Verify the regex pattern in the source code
+      expect(content).toContain("not.?included");
+    });
+
+    test("is_rate_limited function contains all expected patterns", () => {
+      // Extract the function and verify it has all patterns
+      const funcMatch = content.match(/is_rate_limited\s*\(\)\s*\{[^}]+\}/);
+      expect(funcMatch).not.toBeNull();
+      const func = funcMatch![0];
+      
+      expect(func).toContain("rate.?limit");
+      expect(func).toContain("quota");
+      expect(func).toContain("429");
+      expect(func).toContain("too.?many.?request");
+      expect(func).toContain("exhausted");
+      expect(func).toContain("overloaded");
+      expect(func).toContain("capacity");
+      expect(func).toContain("not.?included");
+    });
+  });
+
   describe("PRD.md validation integration", () => {
     let testDir: string;
     const ralphPath = join(import.meta.dir, "..", "..", "..", "ralph.sh");

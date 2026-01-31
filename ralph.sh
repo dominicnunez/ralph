@@ -388,7 +388,7 @@ get_current_task() {
 
 is_rate_limited() {
     local output="$1"
-    echo "$output" | grep -qiE 'rate.?limit|quota|429|too.?many.?request|exhausted|overloaded|capacity'
+    echo "$output" | grep -qiE 'rate.?limit|quota|429|too.?many.?request|exhausted|overloaded|capacity|not.?included'
 }
 
 switch_to_fallback() {
