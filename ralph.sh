@@ -734,7 +734,7 @@ while [[ "$MAX" -eq -1 ]] || [[ "$i" -lt "$MAX" ]]; do
             mkdir -p completed-prds
             timestamp=$(date +%Y%m%d-%H%M%S)
             # Try to extract title from PRD for meaningful filename
-            title=$(head -1 PRD.md | sed 's/^#\s*//' | tr '[:upper:]' '[:lower:]' | tr ' ' '-' | tr -cd '[:alnum:]-')
+            title=$(head -1 PRD.md | sed 's/^#\s*//' | awk '{print $1, $2, $3}' | tr '[:upper:]' '[:lower:]' | tr ' ' '-' | tr -cd '[:alnum:]-' | sed 's/--*/-/g')
             if [[ -n "$title" ]]; then
                 archive_name="${timestamp}-${title}.md"
             else

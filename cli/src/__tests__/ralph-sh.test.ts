@@ -844,4 +844,43 @@ describe("ralph.sh script", () => {
       expect(checkBlock).toContain("Some rate limit messages appear in output without causing a non-zero exit");
     });
   });
+
+  describe("archive naming", () => {
+    const content = readFileSync(ralphPath, "utf-8");
+
+    test("title extraction uses awk to limit to first 3 words", () => {
+      // Should use awk to extract only first 3 words from the title
+      expect(content).toContain("awk '{print $1, $2, $3}'");
+    });
+
+    test("title extraction collapses multiple dashes", () => {
+      // Should use sed to collapse multiple consecutive dashes
+      expect(content).toContain("sed 's/--*/-/g'");
+    });
+
+    test("archive title pipeline extracts first 3 words before transformations", () => {
+      // The awk command should come before tr commands to limit word count early
+      const awkPos = content.indexOf("awk '{print $1, $2, $3}'");
+      const trLowerPos = content.indexOf("tr '[:upper:]' '[:lower:]'");
+      expect(awkPos).toBeGreaterThan(-1);
+      expect(trLowerPos).toBeGreaterThan(-1);
+      expect(awkPos).toBeLessThan(trLowerPos);
+    });
+
+    test("archive title pipeline collapses dashes after other transformations", () => {
+      // The sed command to collapse dashes should come at the end
+      const trCdPos = content.indexOf("tr -cd '[:alnum:]-'");
+      const sedDashPos = content.indexOf("sed 's/--*/-/g'");
+      expect(trCdPos).toBeGreaterThan(-1);
+      expect(sedDashPos).toBeGreaterThan(-1);
+      expect(sedDashPos).toBeGreaterThan(trCdPos);
+    });
+
+    test("full archive naming pipeline is correct", () => {
+      // The complete pipeline should be: sed -> awk -> tr lower -> tr dash -> tr clean -> sed collapse
+      expect(content).toContain(
+        "title=$(head -1 PRD.md | sed 's/^#\\s*//' | awk '{print $1, $2, $3}' | tr '[:upper:]' '[:lower:]' | tr ' ' '-' | tr -cd '[:alnum:]-' | sed 's/--*/-/g')"
+      );
+    });
+  });
 });
