@@ -12,6 +12,3 @@ export { BaseDetector } from "./base.js";
 
 // Registry
 export { DetectorRegistry, createRegistry } from "./registry.js";
-
-// Detectors
-export { NodejsDetector } from "./nodejs.js";
