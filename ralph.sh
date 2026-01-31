@@ -412,19 +412,19 @@ switch_to_fallback() {
 # ─────────────────────────────────────────────────────────────
 
 if [[ "$SKIP_COMMIT" == "1" ]]; then
-    COMMIT_INSTRUCTIONS=$(cat <<'EOF'
+    COMMIT_INSTRUCTIONS=$(cat <<EOF
 - If tests PASS:
   - Update PRD.md to mark the task complete (change [ ] to [x])
   - Do NOT commit any changes in this run
-  - Append what worked to progress.txt
+  - Append what worked to $PROGRESS_FILE
 EOF
 )
 else
-    COMMIT_INSTRUCTIONS=$(cat <<'EOF'
+    COMMIT_INSTRUCTIONS=$(cat <<EOF
 - If tests PASS:
   - Update PRD.md to mark the task complete (change [ ] to [x])
   - Commit your changes with message: feat: [task description] (do NOT add Co-Authored-By)
-  - Append what worked to progress.txt
+  - Append what worked to $PROGRESS_FILE
 EOF
 )
 fi

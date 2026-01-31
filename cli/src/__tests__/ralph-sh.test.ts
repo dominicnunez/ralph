@@ -395,6 +395,61 @@ describe("ralph.sh script", () => {
     });
   });
 
+  describe("COMMIT_INSTRUCTIONS uses $PROGRESS_FILE", () => {
+    const content = readFileSync(ralphPath, "utf-8");
+
+    test("COMMIT_INSTRUCTIONS with SKIP_COMMIT uses $PROGRESS_FILE instead of progress.txt", () => {
+      // Find the SKIP_COMMIT=1 COMMIT_INSTRUCTIONS block
+      const skipCommitBlock = content.match(/if \[\[ "\$SKIP_COMMIT" == "1" \]\]; then[\s\S]*?^fi$/m);
+      expect(skipCommitBlock).not.toBeNull();
+      const block = skipCommitBlock![0];
+      
+      // Should use $PROGRESS_FILE, not progress.txt
+      expect(block).toContain("$PROGRESS_FILE");
+      expect(block).not.toContain("progress.txt");
+    });
+
+    test("COMMIT_INSTRUCTIONS without SKIP_COMMIT uses $PROGRESS_FILE instead of progress.txt", () => {
+      // Find the else block for COMMIT_INSTRUCTIONS
+      const elseBlockMatch = content.match(/else\s+COMMIT_INSTRUCTIONS=\$\(cat <<EOF[\s\S]*?EOF\s*\)/);
+      expect(elseBlockMatch).not.toBeNull();
+      const elseBlock = elseBlockMatch![0];
+      
+      // Should use $PROGRESS_FILE, not progress.txt
+      expect(elseBlock).toContain("$PROGRESS_FILE");
+      expect(elseBlock).not.toContain("progress.txt");
+    });
+
+    test("COMMIT_INSTRUCTIONS heredoc uses unquoted EOF for variable expansion", () => {
+      // Both COMMIT_INSTRUCTIONS should use <<EOF (not <<'EOF') to allow variable expansion
+      // Find lines containing COMMIT_INSTRUCTIONS= and check heredoc style
+      const lines = content.split('\n');
+      const commitInstructionsLines = lines.filter(line => 
+        line.includes('COMMIT_INSTRUCTIONS=$(cat <<')
+      );
+      
+      // Should have exactly 2 COMMIT_INSTRUCTIONS assignments
+      expect(commitInstructionsLines.length).toBe(2);
+      
+      // Neither should use single-quoted EOF which prevents variable expansion
+      for (const line of commitInstructionsLines) {
+        expect(line).toContain('<<EOF');
+        expect(line).not.toContain("<<'EOF'");
+      }
+    });
+
+    test("COMMIT_INSTRUCTIONS contains 'Append what worked to' instruction", () => {
+      // Both variants should instruct appending to progress file
+      const skipCommitBlock = content.match(/if \[\[ "\$SKIP_COMMIT" == "1" \]\]; then[\s\S]*?^else$/m);
+      expect(skipCommitBlock).not.toBeNull();
+      expect(skipCommitBlock![0]).toContain("Append what worked to");
+      
+      const elseBlock = content.match(/else\s+COMMIT_INSTRUCTIONS=\$\(cat <<EOF[\s\S]*?EOF\s*\)/);
+      expect(elseBlock).not.toBeNull();
+      expect(elseBlock![0]).toContain("Append what worked to");
+    });
+  });
+
   describe("PRD.md validation integration", () => {
     let testDir: string;
     const ralphPath = join(import.meta.dir, "..", "..", "..", "ralph.sh");
