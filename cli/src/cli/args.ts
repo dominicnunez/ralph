@@ -12,9 +12,6 @@ export interface CliOptions {
   testCmd?: string;
   prd?: string;
   verbose?: boolean;
-  init?: boolean;
-  force?: boolean;
-  yes?: boolean;
   singleTask?: string;
 }
 
@@ -50,10 +47,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
     .option("--no-tests", "Skip test verification (not recommended)")
     .option("--test-cmd <cmd>", "Custom test command")
     .option("--prd <path>", "Path to PRD.md file", "PRD.md")
-    .option("-v, --verbose", "Enable verbose output")
-    .option("--init", "Initialize project with auto-detected settings")
-    .option("--force", "Force overwrite of existing config (with --init)")
-    .option("-y, --yes", "Skip confirmation prompts (with --init)");
+    .option("-v, --verbose", "Enable verbose output");
 
   program.parse(argv);
   const opts = program.opts();
@@ -80,9 +74,6 @@ export function parseArgs(argv: string[]): ParsedArgs {
     testCmd: opts.testCmd,
     prd: opts.prd,
     verbose: opts.verbose,
-    init: opts.init,
-    force: opts.force,
-    yes: opts.yes,
     singleTask: firstArg && !isDirectory(firstArg) ? firstArg : undefined,
   };
 
