@@ -627,12 +627,12 @@ while [[ "$MAX" -eq -1 ]] || [[ "$i" -lt "$MAX" ]]; do
                 log "WARN" "No tests written, iteration failed"
                 verification_failed=1
                 
-                # Append to progress.txt so AI knows
-                echo "" >> progress.txt
-                echo "## FAILED - Iteration $i" >> progress.txt
-                echo "- Reason: No test files were created or modified" >> progress.txt
-                echo "- You MUST write tests before the task can be completed" >> progress.txt
-                echo "---" >> progress.txt
+                # Append to progress file so AI knows
+                echo "" >> "$PROGRESS_FILE"
+                echo "## FAILED - Iteration $i" >> "$PROGRESS_FILE"
+                echo "- Reason: No test files were created or modified" >> "$PROGRESS_FILE"
+                echo "- You MUST write tests before the task can be completed" >> "$PROGRESS_FILE"
+                echo "---" >> "$PROGRESS_FILE"
             fi
         fi
         
@@ -642,12 +642,12 @@ while [[ "$MAX" -eq -1 ]] || [[ "$i" -lt "$MAX" ]]; do
                 log "WARN" "Tests failed, iteration failed"
                 verification_failed=1
                 
-                # Append to progress.txt so AI knows
-                echo "" >> progress.txt
-                echo "## FAILED - Iteration $i" >> progress.txt
-                echo "- Reason: Tests failed" >> progress.txt
-                echo "- Fix the failing tests before marking the task complete" >> progress.txt
-                echo "---" >> progress.txt
+                # Append to progress file so AI knows
+                echo "" >> "$PROGRESS_FILE"
+                echo "## FAILED - Iteration $i" >> "$PROGRESS_FILE"
+                echo "- Reason: Tests failed" >> "$PROGRESS_FILE"
+                echo "- Fix the failing tests before marking the task complete" >> "$PROGRESS_FILE"
+                echo "---" >> "$PROGRESS_FILE"
             fi
         fi
         

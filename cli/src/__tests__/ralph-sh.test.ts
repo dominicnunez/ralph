@@ -504,6 +504,73 @@ describe("ralph.sh script", () => {
     });
   });
 
+  describe("test verification failure blocks use $PROGRESS_FILE", () => {
+    const content = readFileSync(ralphPath, "utf-8");
+
+    test("no tests written block appends to $PROGRESS_FILE", () => {
+      // Find the block that handles "no test files written" case
+      // This block contains "No test files were created or modified"
+      const noTestsBlock = content.match(/# Append to progress file so AI knows[\s\S]*?echo "---" >> "\$PROGRESS_FILE"/);
+      expect(noTestsBlock).not.toBeNull();
+      
+      // All echo lines should use $PROGRESS_FILE
+      const block = noTestsBlock![0];
+      expect(block).toContain('>> "$PROGRESS_FILE"');
+      expect(block).not.toContain('>> progress.txt');
+    });
+
+    test("tests failed block appends to $PROGRESS_FILE", () => {
+      // Find the second block that handles "tests failed" case
+      // This block contains "Tests failed"
+      const testFailedBlocks = content.match(/# Append to progress file so AI knows[\s\S]*?echo "---" >> "\$PROGRESS_FILE"/g);
+      expect(testFailedBlocks).not.toBeNull();
+      expect(testFailedBlocks!.length).toBe(2); // Two failure blocks
+      
+      // Both blocks should use $PROGRESS_FILE
+      for (const block of testFailedBlocks!) {
+        expect(block).toContain('>> "$PROGRESS_FILE"');
+        expect(block).not.toContain('>> progress.txt');
+      }
+    });
+
+    test("failure blocks have updated comments (progress file, not progress.txt)", () => {
+      // The comments should say "progress file" not "progress.txt"
+      expect(content).toContain("# Append to progress file so AI knows");
+      expect(content).not.toContain("# Append to progress.txt so AI knows");
+    });
+
+    test("no tests written block contains correct failure reason", () => {
+      // Find the first failure block
+      const noTestsBlockMatch = content.match(/if ! verify_tests_written[\s\S]*?fi\s+fi/);
+      expect(noTestsBlockMatch).not.toBeNull();
+      const block = noTestsBlockMatch![0];
+      
+      // Should contain the reason for failure
+      expect(block).toContain("No test files were created or modified");
+      expect(block).toContain("You MUST write tests");
+    });
+
+    test("tests failed block contains correct failure reason", () => {
+      // Find the tests failed block
+      const testsFailedMatch = content.match(/if ! run_tests "\$DETECTED_TEST_CMD"[\s\S]*?fi\s+fi/);
+      expect(testsFailedMatch).not.toBeNull();
+      const block = testsFailedMatch![0];
+      
+      // Should contain the reason for failure
+      expect(block).toContain("Tests failed");
+      expect(block).toContain("Fix the failing tests");
+    });
+
+    test("no progress.txt references remain in test verification section", () => {
+      // Find the entire test verification section
+      const testVerifySection = content.match(/# TEST VERIFICATION GATE[\s\S]*?# COMPLETION CHECK/);
+      expect(testVerifySection).not.toBeNull();
+      
+      // Should not have any progress.txt references
+      expect(testVerifySection![0]).not.toContain('progress.txt');
+    });
+  });
+
   describe("PRD.md validation integration", () => {
     let testDir: string;
     const ralphPath = join(import.meta.dir, "..", "..", "..", "ralph.sh");
