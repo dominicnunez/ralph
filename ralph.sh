@@ -610,6 +610,20 @@ while [[ "$MAX" -eq -1 ]] || [[ "$i" -lt "$MAX" ]]; do
         fi
     fi
 
+    # Check for rate limiting even when exit code is 0
+    # Some rate limit messages appear in output without causing a non-zero exit
+    if [[ "$ENGINE" == "opencode" ]] && is_rate_limited "$result"; then
+        log "WARN" "Rate limit detected in output (exit code was 0)"
+        if switch_to_fallback; then
+            ((--i))
+            continue
+        else
+            log "ERROR" "Rate limit and no fallback available"
+            echo "Rate limit error and no fallback available"
+            exit 1
+        fi
+    fi
+
     echo ""
 
     # ─────────────────────────────────────────────────────────

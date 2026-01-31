@@ -749,4 +749,99 @@ describe("ralph.sh script", () => {
       expect(result.status).toBe(1);
     });
   });
+
+  describe("rate limit check after error handling (exit code 0)", () => {
+    const content = readFileSync(join(import.meta.dir, "..", "..", "..", "ralph.sh"), "utf-8");
+
+    test("rate limit check exists after the error handling block", () => {
+      // Find the error handling block that ends with checking exit_code -ne 0
+      const errorHandlingMatch = content.match(
+        /if \[\[ \$exit_code -ne 0 \]\][\s\S]*?fi\s*\n/g
+      );
+      expect(errorHandlingMatch).not.toBeNull();
+      
+      // The next block after error handling should check for rate limiting when exit code is 0
+      const afterErrorHandling = content.indexOf("fi\n", content.indexOf("if [[ $exit_code -ne 0 ]]"));
+      const nextSection = content.slice(afterErrorHandling, afterErrorHandling + 500);
+      
+      // Should have a comment explaining the check
+      expect(nextSection).toContain("Check for rate limiting even when exit code is 0");
+    });
+
+    test("rate limit check for exit code 0 uses is_rate_limited function", () => {
+      // Find the section after the first error handling block
+      const afterErrorHandling = content.indexOf("fi\n", content.indexOf("if [[ $exit_code -ne 0 ]]"));
+      const nextSection = content.slice(afterErrorHandling, afterErrorHandling + 600);
+      
+      // Should check ENGINE is opencode and call is_rate_limited
+      expect(nextSection).toMatch(/if \[\[ "\$ENGINE" == "opencode" \]\] && is_rate_limited "\$result"/);
+    });
+
+    test("rate limit check for exit code 0 calls switch_to_fallback", () => {
+      // Find the section with the exit code 0 rate limit check
+      const checkMatch = content.match(
+        /# Check for rate limiting even when exit code is 0[\s\S]*?fi\n/
+      );
+      expect(checkMatch).not.toBeNull();
+      const checkBlock = checkMatch![0];
+      
+      expect(checkBlock).toContain("switch_to_fallback");
+    });
+
+    test("rate limit check for exit code 0 decrements iteration counter on fallback success", () => {
+      const checkMatch = content.match(
+        /# Check for rate limiting even when exit code is 0[\s\S]*?fi\n/
+      );
+      expect(checkMatch).not.toBeNull();
+      const checkBlock = checkMatch![0];
+      
+      // Should decrement i and continue the loop
+      expect(checkBlock).toContain("((--i))");
+      expect(checkBlock).toContain("continue");
+    });
+
+    test("rate limit check for exit code 0 exits with error when no fallback available", () => {
+      const checkMatch = content.match(
+        /# Check for rate limiting even when exit code is 0[\s\S]*?fi\n/
+      );
+      expect(checkMatch).not.toBeNull();
+      const checkBlock = checkMatch![0];
+      
+      // Should exit 1 when no fallback
+      expect(checkBlock).toContain("exit 1");
+      expect(checkBlock).toContain("Rate limit and no fallback available");
+    });
+
+    test("rate limit check for exit code 0 logs warning about exit code being 0", () => {
+      const checkMatch = content.match(
+        /# Check for rate limiting even when exit code is 0[\s\S]*?fi\n/
+      );
+      expect(checkMatch).not.toBeNull();
+      const checkBlock = checkMatch![0];
+      
+      // Should log that exit code was 0
+      expect(checkBlock).toMatch(/log "WARN".*exit code was 0/);
+    });
+
+    test("rate limit check for exit code 0 is placed before TEST VERIFICATION GATE", () => {
+      // The rate limit check should be before the test verification section
+      const rateLimitCheckPos = content.indexOf("Check for rate limiting even when exit code is 0");
+      const testVerificationPos = content.indexOf("TEST VERIFICATION GATE");
+      
+      expect(rateLimitCheckPos).toBeGreaterThan(0);
+      expect(testVerificationPos).toBeGreaterThan(0);
+      expect(rateLimitCheckPos).toBeLessThan(testVerificationPos);
+    });
+
+    test("rate limit check for exit code 0 has explanatory comment", () => {
+      const checkMatch = content.match(
+        /# Check for rate limiting even when exit code is 0[\s\S]*?fi\n/
+      );
+      expect(checkMatch).not.toBeNull();
+      const checkBlock = checkMatch![0];
+      
+      // Should explain why this check is needed
+      expect(checkBlock).toContain("Some rate limit messages appear in output without causing a non-zero exit");
+    });
+  });
 });
