@@ -52,6 +52,54 @@ describe("ralph.sh script", () => {
     });
   });
 
+  describe("setup_logging creates PROGRESS_DIR", () => {
+    const content = readFileSync(ralphPath, "utf-8");
+
+    test("setup_logging function creates PROGRESS_DIR directory", () => {
+      // The setup_logging function should create PROGRESS_DIR
+      expect(content).toContain('mkdir -p "$PROGRESS_DIR"');
+    });
+
+    test("PROGRESS_DIR mkdir is inside setup_logging function", () => {
+      // Find setup_logging function boundaries
+      const setupLoggingStart = content.indexOf("setup_logging() {");
+      expect(setupLoggingStart).toBeGreaterThan(-1);
+      
+      // Find the closing brace (first } at start of line after setup_logging)
+      const contentAfterSetup = content.substring(setupLoggingStart);
+      const lines = contentAfterSetup.split('\n');
+      let closingBracePos = -1;
+      let charCount = 0;
+      for (let i = 1; i < lines.length; i++) {
+        charCount += lines[i - 1].length + 1;
+        if (lines[i] === '}') {
+          closingBracePos = setupLoggingStart + charCount;
+          break;
+        }
+      }
+      expect(closingBracePos).toBeGreaterThan(setupLoggingStart);
+      
+      // Check PROGRESS_DIR mkdir is inside the function
+      const functionBody = content.substring(setupLoggingStart, closingBracePos);
+      expect(functionBody).toContain('mkdir -p "$PROGRESS_DIR"');
+    });
+
+    test("PROGRESS_DIR mkdir is after LOG_DIR mkdir in setup_logging", () => {
+      // Both mkdir commands should exist, with PROGRESS_DIR after LOG_DIR
+      const logDirMkdir = content.indexOf('mkdir -p "$LOG_DIR"');
+      const progressDirMkdir = content.indexOf('mkdir -p "$PROGRESS_DIR"');
+      
+      expect(logDirMkdir).toBeGreaterThan(-1);
+      expect(progressDirMkdir).toBeGreaterThan(-1);
+      expect(progressDirMkdir).toBeGreaterThan(logDirMkdir);
+    });
+
+    test("PROGRESS_DIR mkdir uses -p flag for nested directory creation", () => {
+      // -p flag ensures parent directories are created if needed
+      expect(content).toContain('mkdir -p "$PROGRESS_DIR"');
+    });
+  });
+
   describe("PTY wrapper for OpenCode", () => {
     const content = readFileSync(ralphPath, "utf-8");
 

@@ -199,6 +199,7 @@ fi
 
 setup_logging() {
     mkdir -p "$LOG_DIR"
+    mkdir -p "$PROGRESS_DIR"
     echo "" >> "$LOG_FILE"
     echo "═══════════════════════════════════════════════════════════════" >> "$LOG_FILE"
     echo "  Ralph Session Started: $(date '+%Y-%m-%d %H:%M:%S')" >> "$LOG_FILE"
