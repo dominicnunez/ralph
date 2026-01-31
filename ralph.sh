@@ -435,7 +435,7 @@ You are Ralph, an autonomous coding agent. Do exactly ONE task per iteration.
 ## Steps
 
 1. Read PRD.md and find the first task that is NOT complete (marked [ ]).
-2. Read progress.txt - check the Learnings section first for patterns from previous iterations.
+2. Read $PROGRESS_FILE - check the Learnings section first for patterns from previous iterations.
 3. Implement that ONE task only.
 4. **CRITICAL: You MUST write tests for your implementation.**
 5. **CRITICAL: You MUST run tests and ensure ALL tests pass.**
@@ -457,11 +457,11 @@ $COMMIT_INSTRUCTIONS
 - If tests FAIL:
   - Do NOT mark the task complete
   - Do NOT commit broken code
-  - Append what went wrong to progress.txt (so next iteration can learn)
+  - Append what went wrong to $PROGRESS_FILE (so next iteration can learn)
 
 ## Progress Notes Format
 
-Append to progress.txt using this format:
+Append to $PROGRESS_FILE using this format:
 
 ## Iteration [N] - [Task Name]
 - What was implemented

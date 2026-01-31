@@ -450,6 +450,60 @@ describe("ralph.sh script", () => {
     });
   });
 
+  describe("PROMPT uses $PROGRESS_FILE", () => {
+    const content = readFileSync(ralphPath, "utf-8");
+
+    test("PROMPT references $PROGRESS_FILE instead of progress.txt for reading", () => {
+      // Find the PROMPT heredoc block
+      const promptMatch = content.match(/PROMPT=\$\(cat <<EOF[\s\S]*?^EOF\s*\)/m);
+      expect(promptMatch).not.toBeNull();
+      const prompt = promptMatch![0];
+      
+      // The "Read progress.txt" line should now be "Read $PROGRESS_FILE"
+      expect(prompt).toContain("Read $PROGRESS_FILE");
+      expect(prompt).not.toContain("Read progress.txt");
+    });
+
+    test("PROMPT references $PROGRESS_FILE instead of progress.txt for failure logging", () => {
+      const promptMatch = content.match(/PROMPT=\$\(cat <<EOF[\s\S]*?^EOF\s*\)/m);
+      expect(promptMatch).not.toBeNull();
+      const prompt = promptMatch![0];
+      
+      // The "Append what went wrong to progress.txt" line should use $PROGRESS_FILE
+      expect(prompt).toContain("Append what went wrong to $PROGRESS_FILE");
+      expect(prompt).not.toContain("Append what went wrong to progress.txt");
+    });
+
+    test("PROMPT references $PROGRESS_FILE instead of progress.txt in format section", () => {
+      const promptMatch = content.match(/PROMPT=\$\(cat <<EOF[\s\S]*?^EOF\s*\)/m);
+      expect(promptMatch).not.toBeNull();
+      const prompt = promptMatch![0];
+      
+      // The "Append to progress.txt" line should use $PROGRESS_FILE
+      expect(prompt).toContain("Append to $PROGRESS_FILE");
+      expect(prompt).not.toContain("Append to progress.txt");
+    });
+
+    test("PROMPT heredoc uses unquoted EOF for variable expansion", () => {
+      // Find the PROMPT assignment line
+      const lines = content.split('\n');
+      const promptLine = lines.find(line => line.includes('PROMPT=$(cat <<'));
+      
+      expect(promptLine).toBeDefined();
+      expect(promptLine).toContain('<<EOF');
+      expect(promptLine).not.toContain("<<'EOF'");
+    });
+
+    test("PROMPT does not contain any progress.txt references", () => {
+      const promptMatch = content.match(/PROMPT=\$\(cat <<EOF[\s\S]*?^EOF\s*\)/m);
+      expect(promptMatch).not.toBeNull();
+      const prompt = promptMatch![0];
+      
+      // No references to progress.txt should remain in PROMPT
+      expect(prompt).not.toContain("progress.txt");
+    });
+  });
+
   describe("PRD.md validation integration", () => {
     let testDir: string;
     const ralphPath = join(import.meta.dir, "..", "..", "..", "ralph.sh");
