@@ -354,11 +354,17 @@ verify_tests_written() {
     # Get the last commit (or staged changes if no commits yet)
     local test_changes=""
     
+    # Test file patterns by language:
+    # - JS/TS: *.test.ts, *.spec.js, etc.
+    # - Python: *_test.py, test_*.py
+    # - Go: *_test.go
+    local test_pattern='\.(test|spec)\.(ts|js|tsx|jsx|py)$|_test\.(go|py)$|^test_.*\.py$'
+    
     # Check for test files in staged/unstaged changes
-    test_changes=$(git diff --name-only HEAD 2>/dev/null | grep -E '\.(test|spec)\.(ts|js|tsx|jsx|py)$' || true)
+    test_changes=$(git diff --name-only HEAD 2>/dev/null | grep -E "$test_pattern" || true)
     
     # Also check staged files
-    local staged_tests=$(git diff --cached --name-only 2>/dev/null | grep -E '\.(test|spec)\.(ts|js|tsx|jsx|py)$' || true)
+    local staged_tests=$(git diff --cached --name-only 2>/dev/null | grep -E "$test_pattern" || true)
     
     # Combine
     if [[ -n "$staged_tests" ]]; then
@@ -366,7 +372,7 @@ verify_tests_written() {
     fi
     
     # Also check for test files in recent commits (in case AI committed)
-    local recent_test_commits=$(git diff --name-only HEAD~1 HEAD 2>/dev/null | grep -E '\.(test|spec)\.(ts|js|tsx|jsx|py)$' || true)
+    local recent_test_commits=$(git diff --name-only HEAD~1 HEAD 2>/dev/null | grep -E "$test_pattern" || true)
     if [[ -n "$recent_test_commits" ]]; then
         test_changes="$test_changes"$'\n'"$recent_test_commits"
     fi
