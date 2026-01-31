@@ -11,6 +11,47 @@ describe("ralph.sh script", () => {
     expect(existsSync(ralphPath)).toBe(true);
   });
 
+  describe("centralized progress file variables", () => {
+    const content = readFileSync(ralphPath, "utf-8");
+
+    test("defines PROGRESS_DIR variable", () => {
+      expect(content).toContain('PROGRESS_DIR="$HOME/.ralph/progress"');
+    });
+
+    test("defines PROGRESS_FILE variable with project name", () => {
+      expect(content).toContain('PROGRESS_FILE="$PROGRESS_DIR/progress-${PROJECT_NAME}.log"');
+    });
+
+    test("PROGRESS_DIR is defined after LOG_FILE", () => {
+      const logFilePos = content.indexOf('LOG_FILE="$LOG_DIR/ralph-${PROJECT_NAME}.log"');
+      const progressDirPos = content.indexOf('PROGRESS_DIR="$HOME/.ralph/progress"');
+      expect(progressDirPos).toBeGreaterThan(logFilePos);
+    });
+
+    test("PROGRESS_FILE is defined after PROGRESS_DIR", () => {
+      const progressDirPos = content.indexOf('PROGRESS_DIR="$HOME/.ralph/progress"');
+      const progressFilePos = content.indexOf('PROGRESS_FILE="$PROGRESS_DIR/progress-${PROJECT_NAME}.log"');
+      expect(progressFilePos).toBeGreaterThan(progressDirPos);
+    });
+
+    test("PROGRESS_DIR uses $HOME for user-independent path", () => {
+      // Should use $HOME so it works for any user
+      expect(content).toMatch(/PROGRESS_DIR="\$HOME/);
+    });
+
+    test("PROGRESS_FILE uses PROJECT_NAME variable for per-project separation", () => {
+      // Should include PROJECT_NAME to keep logs separate per project
+      expect(content).toMatch(/PROGRESS_FILE=.*\$\{?PROJECT_NAME\}?/);
+    });
+
+    test("progress file location is before config section", () => {
+      // Progress file should be defined near the log file, before config loading
+      const progressFilePos = content.indexOf('PROGRESS_FILE=');
+      const preserveEnvSection = content.indexOf("# PRESERVE ENVIRONMENT OVERRIDES BEFORE SOURCING CONFIG");
+      expect(progressFilePos).toBeLessThan(preserveEnvSection);
+    });
+  });
+
   describe("PTY wrapper for OpenCode", () => {
     const content = readFileSync(ralphPath, "utf-8");
 

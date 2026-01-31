@@ -17,6 +17,10 @@ GLOBAL_CONFIG="$HOME/.config/ralph/ralph.env"
 LOG_DIR="${RALPH_LOG_DIR:-$HOME/.ralph/logs}"
 LOG_FILE="$LOG_DIR/ralph-${PROJECT_NAME}.log"
 
+# Progress file location (centralized per-project)
+PROGRESS_DIR="$HOME/.ralph/progress"
+PROGRESS_FILE="$PROGRESS_DIR/progress-${PROJECT_NAME}.log"
+
 # ─────────────────────────────────────────────────────────────
 # PRESERVE ENVIRONMENT OVERRIDES BEFORE SOURCING CONFIG
 # ─────────────────────────────────────────────────────────────
