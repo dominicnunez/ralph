@@ -1,7 +1,8 @@
-import { describe, test, expect } from "bun:test";
-import { readFileSync, existsSync } from "node:fs";
+import { describe, test, expect, beforeEach, afterEach } from "bun:test";
+import { readFileSync, existsSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { spawnSync, execSync } from "node:child_process";
+import { tmpdir } from "node:os";
 
 describe("ralph.sh script", () => {
   const ralphPath = join(import.meta.dir, "..", "..", "..", "ralph.sh");
@@ -242,6 +243,149 @@ describe("ralph.sh script", () => {
       
       expect(result.status).toBe(0);
       expect(result.stdout).toContain("run_opencode is a function");
+    });
+  });
+
+  describe("PRD.md validation", () => {
+    const content = readFileSync(ralphPath, "utf-8");
+
+    test("checks for PRD.md file existence", () => {
+      // Should have the PRD.md existence check
+      expect(content).toContain('if [[ ! -f "PRD.md" ]]');
+    });
+
+    test("prints error message with pwd when PRD.md not found", () => {
+      // Should display error with current directory
+      expect(content).toContain('echo "Error: PRD.md not found in $(pwd)"');
+    });
+
+    test("prints helpful message about creating PRD.md", () => {
+      // Should give user guidance on next steps
+      expect(content).toContain("Create a PRD.md file");
+    });
+
+    test("exits with code 1 when PRD.md not found", () => {
+      // The PRD.md check block should have an exit 1
+      // Find the block more precisely by looking for the complete if block
+      const lines = content.split('\n');
+      const prdCheckStart = lines.findIndex(line => 
+        line.includes('if [[ ! -f "PRD.md" ]]')
+      );
+      expect(prdCheckStart).toBeGreaterThan(-1);
+      
+      // Find the matching fi (next 'fi' at same indentation)
+      let fiLine = -1;
+      for (let i = prdCheckStart + 1; i < lines.length; i++) {
+        if (lines[i].trim() === 'fi') {
+          fiLine = i;
+          break;
+        }
+      }
+      expect(fiLine).toBeGreaterThan(prdCheckStart);
+      
+      // Check that exit 1 is between the if and fi
+      const blockLines = lines.slice(prdCheckStart, fiLine + 1);
+      const hasExit1 = blockLines.some(line => line.includes('exit 1'));
+      expect(hasExit1).toBe(true);
+    });
+
+    test("PRD.md check is after engine CLI check", () => {
+      // PRD.md check should come after the engine CLI availability check
+      const engineCheckEnd = content.indexOf(
+        "Error: 'opencode' command not found"
+      );
+      const prdCheck = content.indexOf('if [[ ! -f "PRD.md" ]]');
+      expect(prdCheck).toBeGreaterThan(engineCheckEnd);
+    });
+
+    test("PRD.md check is before logging setup", () => {
+      // PRD.md check should come before the logging functions
+      const prdCheck = content.indexOf('if [[ ! -f "PRD.md" ]]');
+      const loggingSection = content.indexOf("# LOGGING FUNCTIONS");
+      expect(prdCheck).toBeLessThan(loggingSection);
+    });
+  });
+
+  describe("PRD.md validation integration", () => {
+    let testDir: string;
+    const ralphPath = join(import.meta.dir, "..", "..", "..", "ralph.sh");
+
+    beforeEach(() => {
+      // Create a unique temp directory for each test
+      testDir = join(
+        tmpdir(),
+        `ralph-prd-test-${Date.now()}-${Math.random().toString(36).slice(2)}`
+      );
+      mkdirSync(testDir, { recursive: true });
+    });
+
+    afterEach(() => {
+      // Clean up temp directory
+      if (testDir && existsSync(testDir)) {
+        rmSync(testDir, { recursive: true, force: true });
+      }
+    });
+
+    test("ralph.sh exits with error when PRD.md is missing", () => {
+      // Run ralph.sh in directory without PRD.md
+      const result = spawnSync("bash", [ralphPath], {
+        cwd: testDir,
+        encoding: "utf-8",
+        stdio: ["pipe", "pipe", "pipe"],
+        env: { ...process.env, PATH: process.env.PATH },
+      });
+
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain("Error: PRD.md not found");
+      expect(result.stderr).toContain(testDir);
+    });
+
+    test("error message includes current directory path", () => {
+      const result = spawnSync("bash", [ralphPath], {
+        cwd: testDir,
+        encoding: "utf-8",
+        stdio: ["pipe", "pipe", "pipe"],
+        env: { ...process.env, PATH: process.env.PATH },
+      });
+
+      // Should show the directory where ralph was run
+      expect(result.stderr).toContain(testDir);
+    });
+
+    test("error message includes guidance on creating PRD.md", () => {
+      const result = spawnSync("bash", [ralphPath], {
+        cwd: testDir,
+        encoding: "utf-8",
+        stdio: ["pipe", "pipe", "pipe"],
+        env: { ...process.env, PATH: process.env.PATH },
+      });
+
+      expect(result.stderr).toContain("Create a PRD.md file");
+    });
+
+    test("ralph.sh proceeds when PRD.md exists (fails on engine check, not PRD)", () => {
+      // Create PRD.md in test directory
+      writeFileSync(join(testDir, "PRD.md"), "# Test PRD\n\n- [ ] Task 1\n");
+
+      // Run ralph.sh with an invalid ENGINE to make it fail fast at validation
+      // We want to verify it passes the PRD.md check but fails elsewhere
+      const result = spawnSync("bash", [ralphPath], {
+        cwd: testDir,
+        encoding: "utf-8",
+        stdio: ["pipe", "pipe", "pipe"],
+        timeout: 5000,
+        env: { 
+          ...process.env, 
+          PATH: process.env.PATH,
+          ENGINE: "invalid_engine"  // This will fail at the ENGINE validation check
+        },
+      });
+
+      // Should NOT fail with PRD.md error (it should fail on invalid ENGINE)
+      expect(result.stderr).not.toContain("Error: PRD.md not found");
+      // Should fail with ENGINE validation error
+      expect(result.stderr).toContain("Invalid ENGINE");
+      expect(result.status).toBe(1);
     });
   });
 });

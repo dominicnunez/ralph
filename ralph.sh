@@ -182,6 +182,13 @@ elif [[ "$ENGINE" == "opencode" ]]; then
     fi
 fi
 
+# Check if PRD.md exists in the current directory
+if [[ ! -f "PRD.md" ]]; then
+    echo "Error: PRD.md not found in $(pwd)" >&2
+    echo "Create a PRD.md file with your project requirements before running Ralph." >&2
+    exit 1
+fi
+
 # ─────────────────────────────────────────────────────────────
 # LOGGING FUNCTIONS
 # ─────────────────────────────────────────────────────────────
