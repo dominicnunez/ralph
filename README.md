@@ -263,6 +263,16 @@ If a rate limit is detected and `OC_FALL_MODEL` is configured, Ralph automatical
 | 0 | All tasks completed successfully |
 | 1 | Max iterations reached or error occurred |
 
+## PRD Archiving
+
+When all tasks complete successfully, Ralph automatically archives the PRD:
+
+- Creates `completed-prds/` directory if it doesn't exist
+- Moves `PRD.md` to `completed-prds/YYYYMMDD-HHMMSS-title.md`
+- Title is extracted from the first `# heading` in the PRD
+
+This keeps your workspace clean and maintains a history of completed work.
+
 ## Requirements
 
 **npm version (`sfs-cli`):**

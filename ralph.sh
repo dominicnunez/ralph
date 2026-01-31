@@ -702,6 +702,23 @@ while [[ "$MAX" -eq -1 ]] || [[ "$i" -lt "$MAX" ]]; do
         fi
         
         log "INFO" "All tasks completed successfully!"
+        
+        # Archive completed PRD
+        if [[ -f "PRD.md" ]]; then
+            mkdir -p completed-prds
+            timestamp=$(date +%Y%m%d-%H%M%S)
+            # Try to extract title from PRD for meaningful filename
+            title=$(head -1 PRD.md | sed 's/^#\s*//' | tr '[:upper:]' '[:lower:]' | tr ' ' '-' | tr -cd '[:alnum:]-')
+            if [[ -n "$title" ]]; then
+                archive_name="${timestamp}-${title}.md"
+            else
+                archive_name="${timestamp}-prd.md"
+            fi
+            mv PRD.md "completed-prds/${archive_name}"
+            log "INFO" "Archived PRD to completed-prds/${archive_name}"
+            echo "  📁 Archived: completed-prds/${archive_name}"
+        fi
+        
         echo "==========================================="
         echo "  ✅ All tasks complete after $i iterations!"
         echo "  ✅ All tests passing!"
