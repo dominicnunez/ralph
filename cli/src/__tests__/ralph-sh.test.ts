@@ -600,8 +600,20 @@ describe("ralph.sh script", () => {
       expect(testRateLimited("Error: rate-limit hit")).toBe(true);
     });
 
-    test("detects 'quota' in output", () => {
+    test("detects 'quota exceeded' in output", () => {
       expect(testRateLimited("quota exceeded")).toBe(true);
+    });
+
+    test("detects 'quota reached' in output", () => {
+      expect(testRateLimited("API quota reached")).toBe(true);
+    });
+
+    test("detects 'quota exhausted' in output", () => {
+      expect(testRateLimited("quota exhausted")).toBe(true);
+    });
+
+    test("detects 'quota-exceeded' with hyphen in output", () => {
+      expect(testRateLimited("Error: quota-exceeded")).toBe(true);
     });
 
     test("detects '429' error code in output", () => {
@@ -616,24 +628,36 @@ describe("ralph.sh script", () => {
       expect(testRateLimited("Error: too-many-requests")).toBe(true);
     });
 
-    test("detects 'exhausted' in output", () => {
-      expect(testRateLimited("API credits exhausted")).toBe(true);
+    test("detects 'over capacity' in output", () => {
+      expect(testRateLimited("Server is over capacity")).toBe(true);
     });
 
-    test("detects 'overloaded' in output", () => {
-      expect(testRateLimited("Server is overloaded")).toBe(true);
+    test("detects 'over-capacity' with hyphen in output", () => {
+      expect(testRateLimited("Error: over-capacity")).toBe(true);
     });
 
-    test("detects 'capacity' in output", () => {
+    test("detects 'at capacity' in output", () => {
       expect(testRateLimited("Server at capacity")).toBe(true);
     });
 
-    test("detects 'not included' (Usage not included in your plan) in output", () => {
+    test("detects 'at-capacity' with hyphen in output", () => {
+      expect(testRateLimited("Error: at-capacity")).toBe(true);
+    });
+
+    test("detects 'not included in your plan' in output", () => {
       expect(testRateLimited("Usage not included in your plan")).toBe(true);
     });
 
-    test("detects 'not-included' with hyphen in output", () => {
+    test("detects 'not included in plan' in output", () => {
+      expect(testRateLimited("This feature not included in plan")).toBe(true);
+    });
+
+    test("detects 'not-included-in-plan' with hyphens in output", () => {
       expect(testRateLimited("Error: not-included-in-plan")).toBe(true);
+    });
+
+    test("detects 'not-included-in-your' with hyphens in output", () => {
+      expect(testRateLimited("Error: not-included-in-your-subscription")).toBe(true);
     });
 
     test("returns false for normal output without rate limit indicators", () => {
@@ -642,12 +666,14 @@ describe("ralph.sh script", () => {
 
     test("is case-insensitive (detects RATE LIMIT, Rate Limit, etc.)", () => {
       expect(testRateLimited("RATE LIMIT exceeded")).toBe(true);
-      expect(testRateLimited("NOT INCLUDED in plan")).toBe(true);
+      expect(testRateLimited("NOT INCLUDED IN YOUR PLAN")).toBe(true);
+      expect(testRateLimited("QUOTA EXCEEDED")).toBe(true);
+      expect(testRateLimited("AT CAPACITY")).toBe(true);
     });
 
-    test("grep regex includes 'not.?included' pattern", () => {
+    test("grep regex includes 'not.?included.?in.?(your|plan)' pattern", () => {
       // Verify the regex pattern in the source code
-      expect(content).toContain("not.?included");
+      expect(content).toContain("not.?included.?in.?(your|plan)");
     });
 
     test("is_rate_limited function contains all expected patterns", () => {
@@ -656,14 +682,47 @@ describe("ralph.sh script", () => {
       expect(funcMatch).not.toBeNull();
       const func = funcMatch![0];
       
+      // Core patterns
       expect(func).toContain("rate.?limit");
-      expect(func).toContain("quota");
       expect(func).toContain("429");
       expect(func).toContain("too.?many.?request");
-      expect(func).toContain("exhausted");
-      expect(func).toContain("overloaded");
-      expect(func).toContain("capacity");
-      expect(func).toContain("not.?included");
+      
+      // More specific patterns to avoid false positives
+      expect(func).toContain("quota.?(exceeded|reached|exhausted)");
+      expect(func).toContain("over.?capacity");
+      expect(func).toContain("(^|[^a-z])at.?capacity");
+      expect(func).toContain("not.?included.?in.?(your|plan)");
+    });
+
+    // False positive prevention tests - these should NOT trigger rate limiting
+    describe("false positive prevention", () => {
+      test("does NOT detect standalone 'capacity' in normal output", () => {
+        expect(testRateLimited("The system has 100GB capacity")).toBe(false);
+        expect(testRateLimited("Full capacity mode enabled")).toBe(false);
+      });
+
+      test("does NOT detect standalone 'quota' in normal output", () => {
+        expect(testRateLimited("Your quota is 500 requests")).toBe(false);
+        expect(testRateLimited("Quota: 1000")).toBe(false);
+      });
+
+      test("does NOT detect standalone 'exhausted' in normal output", () => {
+        expect(testRateLimited("All options exhausted in the search")).toBe(false);
+      });
+
+      test("does NOT detect standalone 'overloaded' in normal output", () => {
+        expect(testRateLimited("The function is overloaded with parameters")).toBe(false);
+      });
+
+      test("does NOT detect standalone 'not included' without plan context", () => {
+        expect(testRateLimited("This feature is not included")).toBe(false);
+        expect(testRateLimited("Error: not-included")).toBe(false);
+      });
+
+      test("does NOT detect 'capacity' in variable names or code", () => {
+        expect(testRateLimited("const maxCapacity = 100")).toBe(false);
+        expect(testRateLimited("calculateCapacity(items)")).toBe(false);
+      });
     });
   });
 

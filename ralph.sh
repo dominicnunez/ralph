@@ -194,6 +194,56 @@ if [[ ! -f "PRD.md" ]]; then
 fi
 
 # ─────────────────────────────────────────────────────────────
+# OPENCODE AUTO-CONFIGURATION
+# ─────────────────────────────────────────────────────────────
+
+setup_opencode_permissions() {
+    local config_dir="$HOME/.config/opencode"
+    local config_file="$config_dir/opencode.json"
+    
+    # Only needed for opencode engine
+    [[ "$ENGINE" != "opencode" ]] && return 0
+    
+    # Create config dir if needed
+    mkdir -p "$config_dir"
+    
+    # If config doesn't exist, create minimal one with ralph permissions
+    if [[ ! -f "$config_file" ]]; then
+        cat > "$config_file" << 'EOF'
+{
+  "$schema": "https://opencode.ai/config.json",
+  "permission": {
+    "external_directory": {
+      "~/.ralph/**": "allow"
+    }
+  }
+}
+EOF
+        echo "✓ Created OpenCode config with Ralph permissions"
+        return 0
+    fi
+    
+    # Config exists - check if ralph permission is already there
+    if grep -q '\.ralph' "$config_file" 2>/dev/null; then
+        return 0  # Already configured
+    fi
+    
+    # Need to add permission to existing config
+    # Use jq if available, otherwise warn user
+    if command -v jq &>/dev/null; then
+        local tmp=$(mktemp)
+        jq '.permission.external_directory["~/.ralph/**"] = "allow"' "$config_file" > "$tmp" && mv "$tmp" "$config_file"
+        echo "✓ Added Ralph permissions to OpenCode config"
+    else
+        echo "⚠️  Please add this to $config_file manually:"
+        echo '  "permission": { "external_directory": { "~/.ralph/**": "allow" } }'
+    fi
+}
+
+# Run OpenCode setup
+setup_opencode_permissions
+
+# ─────────────────────────────────────────────────────────────
 # LOGGING FUNCTIONS
 # ─────────────────────────────────────────────────────────────
 
@@ -388,7 +438,7 @@ get_current_task() {
 
 is_rate_limited() {
     local output="$1"
-    echo "$output" | grep -qiE 'rate.?limit|quota|429|too.?many.?request|exhausted|overloaded|capacity|not.?included'
+    echo "$output" | grep -qiE 'rate.?limit|quota.?(exceeded|reached|exhausted)|429|too.?many.?request|over.?capacity|(^|[^a-z])at.?capacity|not.?included.?in.?(your|plan)'
 }
 
 switch_to_fallback() {
