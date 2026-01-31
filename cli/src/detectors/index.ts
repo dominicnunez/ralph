@@ -17,4 +17,3 @@ export { DetectorRegistry, createRegistry } from "./registry.js";
 export { NodejsDetector } from "./nodejs.js";
 export { PythonDetector } from "./python.js";
 export { GoDetector } from "./go.js";
-export { RustDetector } from "./rust.js";
