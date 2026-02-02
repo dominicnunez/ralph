@@ -41,6 +41,10 @@ ENV_OC_FALL_MODEL=${OC_FALL_MODEL-}
 ENV_TEST_CMD=${TEST_CMD-}
 ENV_SKIP_TEST_VERIFY=${SKIP_TEST_VERIFY-}
 
+# Rate limit settings
+ENV_SOFT_LIMIT_RETRIES=${SOFT_LIMIT_RETRIES-}
+ENV_SOFT_LIMIT_WAIT=${SOFT_LIMIT_WAIT-}
+
 # ─────────────────────────────────────────────────────────────
 # DEFAULT CONFIG (for self-healing if global config missing)
 # ─────────────────────────────────────────────────────────────
@@ -103,6 +107,18 @@ SKIP_TEST_VERIFY=0
 # TEST_CMD=
 
 # ─────────────────────────────────────────────────────────────
+# Rate Limit Settings (OpenCode only)
+# ─────────────────────────────────────────────────────────────
+
+# Number of retries for soft rate limits (per-minute cooldowns)
+# before switching to fallback model
+SOFT_LIMIT_RETRIES=3
+
+# Base wait time in seconds for soft rate limit backoff
+# Actual wait: base * 2^attempt (30s, 60s, 120s)
+SOFT_LIMIT_WAIT=30
+
+# ─────────────────────────────────────────────────────────────
 # Logging Settings
 # ─────────────────────────────────────────────────────────────
 
@@ -146,6 +162,8 @@ fi
 [[ -n "$ENV_OC_FALL_MODEL" ]] && OC_FALL_MODEL="$ENV_OC_FALL_MODEL"
 [[ -n "$ENV_TEST_CMD" ]] && TEST_CMD="$ENV_TEST_CMD"
 [[ -n "$ENV_SKIP_TEST_VERIFY" ]] && SKIP_TEST_VERIFY="$ENV_SKIP_TEST_VERIFY"
+[[ -n "$ENV_SOFT_LIMIT_RETRIES" ]] && SOFT_LIMIT_RETRIES="$ENV_SOFT_LIMIT_RETRIES"
+[[ -n "$ENV_SOFT_LIMIT_WAIT" ]] && SOFT_LIMIT_WAIT="$ENV_SOFT_LIMIT_WAIT"
 
 # ─────────────────────────────────────────────────────────────
 # APPLY SETTINGS (config values already loaded, just set aliases)
@@ -442,9 +460,26 @@ get_current_task() {
 # RATE LIMIT HANDLING (OpenCode only)
 # ─────────────────────────────────────────────────────────────
 
+# Hard rate limits: quota exhausted, billing issues - won't recover with waiting
+is_hard_rate_limit() {
+    local output="$1"
+    echo "$output" | grep -qiE 'insufficient_quota|insufficient.balance|exceeded.*(usage.tier|current.quota)|billing.details|not.?included.?in.?(your|plan)'
+}
+
+# Soft rate limits: temporary cooldowns - may recover after waiting
+is_soft_rate_limit() {
+    local output="$1"
+    # Must have rate limit indicator but NOT hard limit indicators
+    if is_hard_rate_limit "$output"; then
+        return 1
+    fi
+    echo "$output" | grep -qiE 'rate.?limit|statusCode.*429|too.?many.?request|per.?minute|tokens.per.minute|over.?capacity|(^|[^a-z])at.?capacity|retry.?after'
+}
+
+# Any rate limit (soft or hard)
 is_rate_limited() {
     local output="$1"
-    echo "$output" | grep -qiE 'rate.?limit|quota.?(exceeded|reached|exhausted)|429|too.?many.?request|over.?capacity|(^|[^a-z])at.?capacity|not.?included.?in.?(your|plan)'
+    is_hard_rate_limit "$output" || is_soft_rate_limit "$output"
 }
 
 switch_to_fallback() {
@@ -461,6 +496,33 @@ switch_to_fallback() {
         return 0
     fi
     return 1
+}
+
+# Retry with backoff for soft rate limits
+# Returns 0 if retry succeeded, 1 if should give up
+handle_soft_rate_limit() {
+    local attempt="$1"
+    local max_retries="${SOFT_LIMIT_RETRIES:-3}"
+    local base_wait="${SOFT_LIMIT_WAIT:-30}"
+    
+    if [[ "$attempt" -ge "$max_retries" ]]; then
+        log "WARN" "Soft rate limit: exhausted $max_retries retries"
+        echo "⚠️  Soft rate limit persisted after $max_retries retries"
+        return 1
+    fi
+    
+    # Exponential backoff: 30s, 60s, 120s
+    local wait_time=$((base_wait * (2 ** attempt)))
+    
+    echo ""
+    echo "───────────────────────────────────────────────────────────────"
+    echo "  ⏳ Soft rate limit detected (attempt $((attempt + 1))/$max_retries)"
+    echo "  Waiting ${wait_time}s before retry..."
+    echo "───────────────────────────────────────────────────────────────"
+    log "INFO" "Soft rate limit: waiting ${wait_time}s (attempt $((attempt + 1))/$max_retries)"
+    
+    sleep "$wait_time"
+    return 0
 }
 
 # ─────────────────────────────────────────────────────────────
@@ -608,6 +670,7 @@ echo ""
 
 i=0
 consecutive_failures=0
+soft_limit_retries=0
 MAX_CONSECUTIVE_FAILURES=3
 
 while [[ "$MAX" -eq -1 ]] || [[ "$i" -lt "$MAX" ]]; do
@@ -648,36 +711,62 @@ while [[ "$MAX" -eq -1 ]] || [[ "$i" -lt "$MAX" ]]; do
     echo "$result" | head -50 >> "$LOG_FILE"
     echo "[... truncated ...]" >> "$LOG_FILE"
 
-    # Handle errors (rate limiting for OpenCode)
-    if [[ $exit_code -ne 0 ]]; then
-        if [[ "$ENGINE" == "opencode" ]] && is_rate_limited "$result"; then
+    # ─────────────────────────────────────────────────────────
+    # RATE LIMIT HANDLING (OpenCode only)
+    # Strategy: hard limits → immediate fallback
+    #           soft limits → retry with backoff, then fallback
+    # ─────────────────────────────────────────────────────────
+    
+    if [[ "$ENGINE" == "opencode" ]]; then
+        rate_limit_handled=0
+        
+        # Check for hard rate limit (quota exhausted) - immediate fallback
+        if is_hard_rate_limit "$result"; then
+            log "WARN" "Hard rate limit detected (quota/billing)"
+            echo "🚫 Hard rate limit: quota or billing issue"
+            soft_limit_retries=0  # Reset soft counter
             if switch_to_fallback; then
                 ((--i))
-                continue
+                rate_limit_handled=1
             else
-                log "ERROR" "Rate limit and no fallback available"
-                echo "Rate limit error and no fallback available"
+                log "ERROR" "Hard rate limit and no fallback available"
+                echo "❌ Hard rate limit and no fallback available"
                 exit 1
             fi
-        else
-            log "ERROR" "$ENGINE failed with exit code $exit_code"
-            echo "Error from $ENGINE (exit code $exit_code)"
-            exit $exit_code
+        # Check for soft rate limit (temporary cooldown) - retry first
+        elif is_soft_rate_limit "$result"; then
+            log "WARN" "Soft rate limit detected (temporary cooldown)"
+            if handle_soft_rate_limit "$soft_limit_retries"; then
+                ((soft_limit_retries++))
+                ((--i))  # Retry same iteration
+                rate_limit_handled=1
+            else
+                # Retries exhausted, try fallback
+                soft_limit_retries=0
+                if switch_to_fallback; then
+                    ((--i))
+                    rate_limit_handled=1
+                else
+                    log "ERROR" "Soft rate limit persisted, no fallback available"
+                    echo "❌ Rate limit persisted after retries, no fallback available"
+                    exit 1
+                fi
+            fi
         fi
+        
+        if [[ "$rate_limit_handled" -eq 1 ]]; then
+            continue
+        fi
+        
+        # Reset soft limit counter on successful iteration
+        soft_limit_retries=0
     fi
 
-    # Check for rate limiting even when exit code is 0
-    # Some rate limit messages appear in output without causing a non-zero exit
-    if [[ "$ENGINE" == "opencode" ]] && is_rate_limited "$result"; then
-        log "WARN" "Rate limit detected in output (exit code was 0)"
-        if switch_to_fallback; then
-            ((--i))
-            continue
-        else
-            log "ERROR" "Rate limit and no fallback available"
-            echo "Rate limit error and no fallback available"
-            exit 1
-        fi
+    # Handle non-rate-limit errors
+    if [[ $exit_code -ne 0 ]]; then
+        log "ERROR" "$ENGINE failed with exit code $exit_code"
+        echo "Error from $ENGINE (exit code $exit_code)"
+        exit $exit_code
     fi
 
     echo ""
