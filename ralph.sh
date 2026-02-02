@@ -29,6 +29,7 @@ ENV_ENGINE=${ENGINE-}
 ENV_MAX_ITERATIONS=${MAX_ITERATIONS-}
 ENV_SLEEP_SECONDS=${SLEEP_SECONDS-}
 ENV_SKIP_COMMIT=${SKIP_COMMIT-}
+ENV_PUSH_AFTER_COMMIT=${PUSH_AFTER_COMMIT-}
 ENV_MAX_CONSECUTIVE_FAILURES=${MAX_CONSECUTIVE_FAILURES-}
 
 # Claude settings
@@ -93,6 +94,9 @@ SLEEP_SECONDS=2
 
 # Skip git commits (1 = dont commit, useful for testing)
 SKIP_COMMIT=0
+
+# Push after successful commit (1 = push to origin after each commit)
+PUSH_AFTER_COMMIT=0
 
 # Skip test verification (1 = dont check for tests, not recommended)
 SKIP_TEST_VERIFY=0
@@ -162,6 +166,7 @@ fi
 [[ -n "$ENV_MAX_ITERATIONS" ]] && MAX_ITERATIONS="$ENV_MAX_ITERATIONS"
 [[ -n "$ENV_SLEEP_SECONDS" ]] && SLEEP_SECONDS="$ENV_SLEEP_SECONDS"
 [[ -n "$ENV_SKIP_COMMIT" ]] && SKIP_COMMIT="$ENV_SKIP_COMMIT"
+[[ -n "$ENV_PUSH_AFTER_COMMIT" ]] && PUSH_AFTER_COMMIT="$ENV_PUSH_AFTER_COMMIT"
 [[ -n "$ENV_MAX_CONSECUTIVE_FAILURES" ]] && MAX_CONSECUTIVE_FAILURES="$ENV_MAX_CONSECUTIVE_FAILURES"
 [[ -n "$ENV_CLAUDE_MODEL" ]] && CLAUDE_MODEL="$ENV_CLAUDE_MODEL"
 [[ -n "$ENV_OC_PRIME_MODEL" ]] && OC_PRIME_MODEL="$ENV_OC_PRIME_MODEL"
@@ -659,6 +664,7 @@ else
 fi
 
 [[ "$SKIP_COMMIT" == "1" ]] && echo "Commits disabled for this run"
+[[ "$PUSH_AFTER_COMMIT" == "1" ]] && echo "📤 Push after commit: enabled"
 
 if [[ "$SKIP_TEST_VERIFY" == "1" ]]; then
     echo "⚠️  Test verification DISABLED"
@@ -681,6 +687,9 @@ last_failed_task=""
 
 while [[ "$MAX" -eq -1 ]] || [[ "$i" -lt "$MAX" ]]; do
     ((++i))
+    
+    # Record HEAD before iteration (for push detection)
+    head_before=$(git rev-parse HEAD 2>/dev/null || echo "")
     
     current_task=$(get_current_task)
     log_iteration "$i" "$current_task"
@@ -848,6 +857,42 @@ while [[ "$MAX" -eq -1 ]] || [[ "$i" -lt "$MAX" ]]; do
         consecutive_failures=0
         last_failed_task=""
         log "INFO" "Verification passed"
+    fi
+
+    # ─────────────────────────────────────────────────────────
+    # PUSH AFTER COMMIT (if enabled)
+    # ─────────────────────────────────────────────────────────
+    
+    if [[ "$PUSH_AFTER_COMMIT" == "1" ]] && [[ "$SKIP_COMMIT" != "1" ]]; then
+        head_after=$(git rev-parse HEAD 2>/dev/null || echo "")
+        if [[ -n "$head_before" ]] && [[ "$head_before" != "$head_after" ]]; then
+            log "INFO" "New commit detected, pushing to origin"
+            echo "📤 Pushing changes to origin..."
+            
+            # Get current branch
+            current_branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
+            
+            # Check if branch has upstream
+            if git rev-parse --abbrev-ref --symbolic-full-name @{u} >/dev/null 2>&1; then
+                # Has upstream, simple push
+                if git push 2>&1; then
+                    log "INFO" "Push successful"
+                    echo "✅ Pushed to origin/$current_branch"
+                else
+                    log "WARN" "Push failed (will retry next iteration)"
+                    echo "⚠️  Push failed (will retry next iteration)"
+                fi
+            else
+                # No upstream, push with -u
+                if git push -u origin "$current_branch" 2>&1; then
+                    log "INFO" "Push successful (set upstream)"
+                    echo "✅ Pushed to origin/$current_branch (set upstream)"
+                else
+                    log "WARN" "Push failed (will retry next iteration)"
+                    echo "⚠️  Push failed (will retry next iteration)"
+                fi
+            fi
+        fi
     fi
 
     # ─────────────────────────────────────────────────────────
