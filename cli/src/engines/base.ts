@@ -3,6 +3,10 @@ export interface EngineResult {
   output: string;
   exitCode: number;
   rateLimited?: boolean;
+  /** Hard rate limit: quota exhausted, billing issues - won't recover with waiting */
+  hardRateLimited?: boolean;
+  /** Soft rate limit: temporary cooldown - may recover after waiting */
+  softRateLimited?: boolean;
 }
 
 export interface Engine {

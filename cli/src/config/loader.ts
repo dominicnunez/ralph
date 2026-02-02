@@ -20,6 +20,10 @@ export interface Config {
   ocPrimeModel: string;
   ocFallModel: string | undefined;
 
+  // Rate limit handling (OpenCode)
+  softLimitRetries: number;
+  softLimitWait: number;
+
   // Test verification
   testCmd: string | undefined;
   skipTestVerify: boolean;
@@ -69,6 +73,18 @@ OC_PRIME_MODEL=big-pickle
 
 # Fallback model when primary hits rate limits (optional)
 # OC_FALL_MODEL=
+
+# ─────────────────────────────────────────────────────────────
+# Rate Limit Settings (OpenCode only)
+# ─────────────────────────────────────────────────────────────
+
+# Number of retries for soft rate limits (per-minute cooldowns)
+# before switching to fallback model
+SOFT_LIMIT_RETRIES=3
+
+# Base wait time in seconds for soft rate limit backoff
+# Actual wait: base * 2^attempt (30s, 60s, 120s)
+SOFT_LIMIT_WAIT=30
 
 # ─────────────────────────────────────────────────────────────
 # Iteration Settings
@@ -195,6 +211,14 @@ function applyEnvToConfig(config: Config, env: Record<string, string>): void {
     config.ocFallModel = env.OC_FALL_MODEL;
   }
 
+  // Rate limit settings
+  if (env.SOFT_LIMIT_RETRIES) {
+    config.softLimitRetries = parseInt(env.SOFT_LIMIT_RETRIES, 10);
+  }
+  if (env.SOFT_LIMIT_WAIT) {
+    config.softLimitWait = parseInt(env.SOFT_LIMIT_WAIT, 10);
+  }
+
   // Test verification
   if (env.TEST_CMD && env.TEST_CMD.trim()) {
     config.testCmd = env.TEST_CMD;
@@ -258,6 +282,8 @@ export function loadConfig(): Config {
     claudeModel: "sonnet",
     ocPrimeModel: "big-pickle",
     ocFallModel: undefined,
+    softLimitRetries: 3,
+    softLimitWait: 30,
     testCmd: undefined,
     skipTestVerify: false,
     logDir: join(homedir(), ".ralph", "logs"),
@@ -288,6 +314,8 @@ export function loadConfig(): Config {
   if (process.env.CLAUDE_MODEL) processEnv.CLAUDE_MODEL = process.env.CLAUDE_MODEL;
   if (process.env.OC_PRIME_MODEL) processEnv.OC_PRIME_MODEL = process.env.OC_PRIME_MODEL;
   if (process.env.OC_FALL_MODEL) processEnv.OC_FALL_MODEL = process.env.OC_FALL_MODEL;
+  if (process.env.SOFT_LIMIT_RETRIES) processEnv.SOFT_LIMIT_RETRIES = process.env.SOFT_LIMIT_RETRIES;
+  if (process.env.SOFT_LIMIT_WAIT) processEnv.SOFT_LIMIT_WAIT = process.env.SOFT_LIMIT_WAIT;
   if (process.env.TEST_CMD) processEnv.TEST_CMD = process.env.TEST_CMD;
   if (process.env.SKIP_TEST_VERIFY) processEnv.SKIP_TEST_VERIFY = process.env.SKIP_TEST_VERIFY;
   if (process.env.RALPH_LOG_DIR) processEnv.RALPH_LOG_DIR = process.env.RALPH_LOG_DIR;

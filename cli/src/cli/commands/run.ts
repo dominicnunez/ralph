@@ -21,6 +21,35 @@ import pc from "picocolors";
 
 const MAX_CONSECUTIVE_FAILURES = 3;
 
+/**
+ * Handle soft rate limit with exponential backoff
+ * Returns true if should retry, false if should give up
+ */
+async function handleSoftRateLimit(
+  attempt: number,
+  maxRetries: number,
+  baseWait: number
+): Promise<boolean> {
+  if (attempt >= maxRetries) {
+    logWarning(`Soft rate limit: exhausted ${maxRetries} retries`);
+    console.log(`⚠️  Soft rate limit persisted after ${maxRetries} retries`);
+    return false;
+  }
+
+  // Exponential backoff: baseWait * 2^attempt (e.g., 30s, 60s, 120s)
+  const waitTime = baseWait * Math.pow(2, attempt);
+
+  console.log("");
+  console.log("───────────────────────────────────────────────────────────────");
+  console.log(`  ⏳ Soft rate limit detected (attempt ${attempt + 1}/${maxRetries})`);
+  console.log(`  Waiting ${waitTime}s before retry...`);
+  console.log("───────────────────────────────────────────────────────────────");
+  logInfo(`Soft rate limit: waiting ${waitTime}s (attempt ${attempt + 1}/${maxRetries})`);
+
+  await sleep(waitTime);
+  return true;
+}
+
 export interface RunOptions {
   prdPath: string;
   verbose?: boolean;
@@ -94,6 +123,7 @@ export async function runLoop(config: Config, options: RunOptions): Promise<void
   // Main loop
   let iteration = 0;
   let consecutiveFailures = 0;
+  let softLimitRetries = 0;
 
   while (config.maxIterations === -1 || iteration < config.maxIterations) {
     iteration++;
@@ -120,14 +150,52 @@ export async function runLoop(config: Config, options: RunOptions): Promise<void
     logAiOutput(result.output);
     console.log("");
 
-    // Handle errors
-    if (!result.success) {
-      if (result.rateLimited && engine.switchToFallback?.()) {
-        // Retry with fallback
-        iteration--;
-        continue;
+    // Handle rate limits (OpenCode only) - hard vs soft distinction
+    if (config.engine === "opencode") {
+      // Hard rate limit: quota/billing - immediate fallback
+      if (result.hardRateLimited) {
+        logWarning("Hard rate limit detected (quota/billing)");
+        console.log("🚫 Hard rate limit: quota or billing issue");
+        softLimitRetries = 0; // Reset soft counter
+
+        if (engine.switchToFallback?.()) {
+          iteration--;
+          continue;
+        } else {
+          logError("Hard rate limit and no fallback available");
+          console.log("❌ Hard rate limit and no fallback available");
+          process.exit(1);
+        }
       }
-      
+
+      // Soft rate limit: temporary cooldown - retry first
+      if (result.softRateLimited) {
+        logWarning("Soft rate limit detected (temporary cooldown)");
+        
+        if (await handleSoftRateLimit(softLimitRetries, config.softLimitRetries, config.softLimitWait)) {
+          softLimitRetries++;
+          iteration--; // Retry same iteration
+          continue;
+        } else {
+          // Retries exhausted, try fallback
+          softLimitRetries = 0;
+          if (engine.switchToFallback?.()) {
+            iteration--;
+            continue;
+          } else {
+            logError("Soft rate limit persisted, no fallback available");
+            console.log("❌ Rate limit persisted after retries, no fallback available");
+            process.exit(1);
+          }
+        }
+      }
+
+      // Reset soft limit counter on successful iteration
+      softLimitRetries = 0;
+    }
+
+    // Handle non-rate-limit errors
+    if (!result.success) {
       logError(`${engine.name} failed with exit code ${result.exitCode}`);
       process.exit(result.exitCode);
     }
@@ -319,15 +387,53 @@ export async function runSingleTask(
   // Log iteration
   logIteration(1, 1, task, engine.model);
 
-  // Run engine (single attempt with optional fallback)
+  // Run engine with rate limit handling
   let result = await engine.run(prompt);
   logAiOutput(result.output);
   console.log("");
 
-  if (!result.success && result.rateLimited && engine.switchToFallback?.()) {
-    result = await engine.run(prompt);
-    logAiOutput(result.output);
-    console.log("");
+  // Handle rate limits (OpenCode only)
+  if (config.engine === "opencode" && (result.hardRateLimited || result.softRateLimited)) {
+    let softLimitRetries = 0;
+
+    while (result.softRateLimited || result.hardRateLimited) {
+      if (result.hardRateLimited) {
+        // Hard rate limit: immediate fallback
+        logWarning("Hard rate limit detected (quota/billing)");
+        if (engine.switchToFallback?.()) {
+          result = await engine.run(prompt);
+          logAiOutput(result.output);
+          console.log("");
+          break;
+        } else {
+          logError("Hard rate limit and no fallback available");
+          process.exitCode = 1;
+          return;
+        }
+      }
+
+      if (result.softRateLimited) {
+        // Soft rate limit: retry with backoff
+        if (await handleSoftRateLimit(softLimitRetries, config.softLimitRetries, config.softLimitWait)) {
+          softLimitRetries++;
+          result = await engine.run(prompt);
+          logAiOutput(result.output);
+          console.log("");
+        } else {
+          // Retries exhausted, try fallback
+          if (engine.switchToFallback?.()) {
+            result = await engine.run(prompt);
+            logAiOutput(result.output);
+            console.log("");
+            break;
+          } else {
+            logError("Soft rate limit persisted, no fallback available");
+            process.exitCode = 1;
+            return;
+          }
+        }
+      }
+    }
   }
 
   if (!result.success) {

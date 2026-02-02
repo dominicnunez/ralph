@@ -2,15 +2,25 @@ import { spawnSync } from "node:child_process";
 import type { Engine, EngineResult } from "./base.js";
 import { logWarning } from "../ui/logger.js";
 
-// Patterns that indicate rate limiting
-const RATE_LIMIT_PATTERNS = [
+// Hard rate limit patterns: quota exhausted, billing issues - won't recover with waiting
+const HARD_RATE_LIMIT_PATTERNS = [
+  /insufficient_quota/i,
+  /insufficient.balance/i,
+  /exceeded.*(usage.tier|current.quota)/i,
+  /billing.details/i,
+  /not.?included.?in.?(your|plan)/i,
+];
+
+// Soft rate limit patterns: temporary cooldowns - may recover after waiting
+const SOFT_RATE_LIMIT_PATTERNS = [
   /rate.?limit/i,
-  /quota/i,
-  /429/,
+  /statusCode.*429/i,
   /too.?many.?request/i,
-  /exhausted/i,
-  /overloaded/i,
-  /capacity/i,
+  /per.?minute/i,
+  /tokens.per.minute/i,
+  /over.?capacity/i,
+  /at.?capacity/i,
+  /retry.?after/i,
 ];
 
 export class OpenCodeEngine implements Engine {
@@ -52,22 +62,33 @@ export class OpenCodeEngine implements Engine {
       process.stderr.write(result.stderr);
     }
 
-    // Check for rate limiting
-    const rateLimited = this.isRateLimited(output);
+    // Check for rate limiting (hard vs soft)
+    const hardRateLimited = this.isHardRateLimited(output);
+    const softRateLimited = !hardRateLimited && this.isSoftRateLimited(output);
+    const rateLimited = hardRateLimited || softRateLimited;
 
     return {
       success: result.status === 0,
       output,
       exitCode: result.status ?? 1,
       rateLimited,
+      hardRateLimited,
+      softRateLimited,
     };
   }
 
   /**
-   * Check if output indicates rate limiting
+   * Check if output indicates hard rate limiting (quota/billing - immediate fallback)
    */
-  private isRateLimited(output: string): boolean {
-    return RATE_LIMIT_PATTERNS.some(pattern => pattern.test(output));
+  private isHardRateLimited(output: string): boolean {
+    return HARD_RATE_LIMIT_PATTERNS.some(pattern => pattern.test(output));
+  }
+
+  /**
+   * Check if output indicates soft rate limiting (temporary - retry first)
+   */
+  private isSoftRateLimited(output: string): boolean {
+    return SOFT_RATE_LIMIT_PATTERNS.some(pattern => pattern.test(output));
   }
 
   /**
