@@ -27,6 +27,7 @@ export interface Config {
   // Test verification
   testCmd: string | undefined;
   skipTestVerify: boolean;
+  maxConsecutiveFailures: number;
 
   // Logging
   logDir: string;
@@ -105,6 +106,10 @@ SKIP_COMMIT=0
 
 # Skip test verification (1 = don't check for tests, not recommended)
 SKIP_TEST_VERIFY=0
+
+# Maximum consecutive failures before stopping (default: 3)
+# Only counts failures on the SAME task - resets when task changes
+MAX_CONSECUTIVE_FAILURES=3
 
 # ─────────────────────────────────────────────────────────────
 # Test Settings
@@ -228,6 +233,9 @@ function applyEnvToConfig(config: Config, env: Record<string, string>): void {
   } else if (env.SKIP_TEST_VERIFY === "0" || env.SKIP_TEST_VERIFY === "false") {
     config.skipTestVerify = false;
   }
+  if (env.MAX_CONSECUTIVE_FAILURES) {
+    config.maxConsecutiveFailures = parseInt(env.MAX_CONSECUTIVE_FAILURES, 10);
+  }
 
   // Logging
   if (env.RALPH_LOG_DIR && env.RALPH_LOG_DIR.trim()) {
@@ -286,6 +294,7 @@ export function loadConfig(): Config {
     softLimitWait: 30,
     testCmd: undefined,
     skipTestVerify: false,
+    maxConsecutiveFailures: 3,
     logDir: join(homedir(), ".ralph", "logs"),
     progressDir: join(homedir(), ".ralph", "progress"),
     btcaEnabled: false,
@@ -318,6 +327,7 @@ export function loadConfig(): Config {
   if (process.env.SOFT_LIMIT_WAIT) processEnv.SOFT_LIMIT_WAIT = process.env.SOFT_LIMIT_WAIT;
   if (process.env.TEST_CMD) processEnv.TEST_CMD = process.env.TEST_CMD;
   if (process.env.SKIP_TEST_VERIFY) processEnv.SKIP_TEST_VERIFY = process.env.SKIP_TEST_VERIFY;
+  if (process.env.MAX_CONSECUTIVE_FAILURES) processEnv.MAX_CONSECUTIVE_FAILURES = process.env.MAX_CONSECUTIVE_FAILURES;
   if (process.env.RALPH_LOG_DIR) processEnv.RALPH_LOG_DIR = process.env.RALPH_LOG_DIR;
   if (process.env.RALPH_PROGRESS_DIR) processEnv.RALPH_PROGRESS_DIR = process.env.RALPH_PROGRESS_DIR;
   if (process.env.BTCA_ENABLED) processEnv.BTCA_ENABLED = process.env.BTCA_ENABLED;

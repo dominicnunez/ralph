@@ -19,8 +19,6 @@ import {
 } from "../../ui/logger.js";
 import pc from "picocolors";
 
-const MAX_CONSECUTIVE_FAILURES = 3;
-
 /**
  * Handle soft rate limit with exponential backoff
  * Returns true if should retry, false if should give up
@@ -124,6 +122,7 @@ export async function runLoop(config: Config, options: RunOptions): Promise<void
   let iteration = 0;
   let consecutiveFailures = 0;
   let softLimitRetries = 0;
+  let lastFailedTask = "";
 
   while (config.maxIterations === -1 || iteration < config.maxIterations) {
     iteration++;
@@ -205,8 +204,16 @@ export async function runLoop(config: Config, options: RunOptions): Promise<void
       const verification = verify(testCmd);
       
       if (!verification.testsWritten) {
-        consecutiveFailures++;
-        logWarning(`No tests written, iteration failed (${consecutiveFailures}/${MAX_CONSECUTIVE_FAILURES})`);
+        // Only increment if same task is failing
+        if (taskName !== lastFailedTask) {
+          consecutiveFailures = 1;
+          lastFailedTask = taskName;
+          logInfo("Task changed, resetting failure counter");
+        } else {
+          consecutiveFailures++;
+        }
+        
+        logWarning(`No tests written, iteration failed (${consecutiveFailures}/${config.maxConsecutiveFailures})`);
         
         appendFailure(
           progressFile,
@@ -215,23 +222,31 @@ export async function runLoop(config: Config, options: RunOptions): Promise<void
           "You MUST write tests before the task can be completed"
         );
 
-        if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
-          logError("Too many consecutive failures, stopping");
+        if (consecutiveFailures >= config.maxConsecutiveFailures) {
+          logError(`Too many consecutive failures on task '${taskName}', stopping`);
           console.log(pc.red("  Too many consecutive failures on this task"));
           console.log(pc.red("  Manual intervention required"));
           console.log(`  Check log: ${logFile}`);
           process.exit(1);
         }
 
-        console.log(`  Verification failed (${consecutiveFailures}/${MAX_CONSECUTIVE_FAILURES})`);
+        console.log(`  Verification failed (${consecutiveFailures}/${config.maxConsecutiveFailures})`);
         console.log("  Continuing to next iteration to fix...");
         await sleep(config.sleepSeconds);
         continue;
       }
 
       if (!verification.testsPassed) {
-        consecutiveFailures++;
-        logWarning(`Tests failed, iteration failed (${consecutiveFailures}/${MAX_CONSECUTIVE_FAILURES})`);
+        // Only increment if same task is failing
+        if (taskName !== lastFailedTask) {
+          consecutiveFailures = 1;
+          lastFailedTask = taskName;
+          logInfo("Task changed, resetting failure counter");
+        } else {
+          consecutiveFailures++;
+        }
+        
+        logWarning(`Tests failed, iteration failed (${consecutiveFailures}/${config.maxConsecutiveFailures})`);
         
         appendFailure(
           progressFile,
@@ -240,15 +255,15 @@ export async function runLoop(config: Config, options: RunOptions): Promise<void
           "Fix the failing tests before marking the task complete"
         );
 
-        if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
-          logError("Too many consecutive failures, stopping");
+        if (consecutiveFailures >= config.maxConsecutiveFailures) {
+          logError(`Too many consecutive failures on task '${taskName}', stopping`);
           console.log(pc.red("  Too many consecutive failures on this task"));
           console.log(pc.red("  Manual intervention required"));
           console.log(`  Check log: ${logFile}`);
           process.exit(1);
         }
 
-        console.log(`  Verification failed (${consecutiveFailures}/${MAX_CONSECUTIVE_FAILURES})`);
+        console.log(`  Verification failed (${consecutiveFailures}/${config.maxConsecutiveFailures})`);
         console.log("  Continuing to next iteration to fix...");
         await sleep(config.sleepSeconds);
         continue;
@@ -256,6 +271,7 @@ export async function runLoop(config: Config, options: RunOptions): Promise<void
 
       // Reset failure counter on success
       consecutiveFailures = 0;
+      lastFailedTask = "";
       logInfo("Verification passed");
     }
 

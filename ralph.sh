@@ -29,6 +29,7 @@ ENV_ENGINE=${ENGINE-}
 ENV_MAX_ITERATIONS=${MAX_ITERATIONS-}
 ENV_SLEEP_SECONDS=${SLEEP_SECONDS-}
 ENV_SKIP_COMMIT=${SKIP_COMMIT-}
+ENV_MAX_CONSECUTIVE_FAILURES=${MAX_CONSECUTIVE_FAILURES-}
 
 # Claude settings
 ENV_CLAUDE_MODEL=${CLAUDE_MODEL-}
@@ -96,6 +97,10 @@ SKIP_COMMIT=0
 # Skip test verification (1 = dont check for tests, not recommended)
 SKIP_TEST_VERIFY=0
 
+# Maximum consecutive failures before stopping (default: 3)
+# Only counts failures on the SAME task - resets when task changes
+MAX_CONSECUTIVE_FAILURES=3
+
 # ─────────────────────────────────────────────────────────────
 # Test Settings
 # ─────────────────────────────────────────────────────────────
@@ -157,6 +162,7 @@ fi
 [[ -n "$ENV_MAX_ITERATIONS" ]] && MAX_ITERATIONS="$ENV_MAX_ITERATIONS"
 [[ -n "$ENV_SLEEP_SECONDS" ]] && SLEEP_SECONDS="$ENV_SLEEP_SECONDS"
 [[ -n "$ENV_SKIP_COMMIT" ]] && SKIP_COMMIT="$ENV_SKIP_COMMIT"
+[[ -n "$ENV_MAX_CONSECUTIVE_FAILURES" ]] && MAX_CONSECUTIVE_FAILURES="$ENV_MAX_CONSECUTIVE_FAILURES"
 [[ -n "$ENV_CLAUDE_MODEL" ]] && CLAUDE_MODEL="$ENV_CLAUDE_MODEL"
 [[ -n "$ENV_OC_PRIME_MODEL" ]] && OC_PRIME_MODEL="$ENV_OC_PRIME_MODEL"
 [[ -n "$ENV_OC_FALL_MODEL" ]] && OC_FALL_MODEL="$ENV_OC_FALL_MODEL"
@@ -671,7 +677,7 @@ echo ""
 i=0
 consecutive_failures=0
 soft_limit_retries=0
-MAX_CONSECUTIVE_FAILURES=3
+last_failed_task=""
 
 while [[ "$MAX" -eq -1 ]] || [[ "$i" -lt "$MAX" ]]; do
     ((++i))
@@ -812,13 +818,21 @@ while [[ "$MAX" -eq -1 ]] || [[ "$i" -lt "$MAX" ]]; do
         
         # Handle verification failure
         if [[ $verification_failed -eq 1 ]]; then
-            ((consecutive_failures++))
+            # Only increment if same task is failing
+            if [[ "$current_task" != "$last_failed_task" ]]; then
+                consecutive_failures=1
+                last_failed_task="$current_task"
+                log "INFO" "Task changed, resetting failure counter"
+            else
+                ((consecutive_failures++))
+            fi
+            
             echo ""
             echo "⚠️  Verification failed ($consecutive_failures/$MAX_CONSECUTIVE_FAILURES)"
-            log "WARN" "Consecutive failures: $consecutive_failures"
+            log "WARN" "Consecutive failures on task '$current_task': $consecutive_failures"
             
             if [[ $consecutive_failures -ge $MAX_CONSECUTIVE_FAILURES ]]; then
-                log "ERROR" "Too many consecutive failures, stopping"
+                log "ERROR" "Too many consecutive failures on task '$current_task', stopping"
                 echo "❌ Too many consecutive failures on this task"
                 echo "   Manual intervention required"
                 echo "   Check log: $LOG_FILE"
@@ -832,6 +846,7 @@ while [[ "$MAX" -eq -1 ]] || [[ "$i" -lt "$MAX" ]]; do
         
         # Reset failure counter on success
         consecutive_failures=0
+        last_failed_task=""
         log "INFO" "Verification passed"
     fi
 
