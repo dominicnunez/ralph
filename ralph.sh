@@ -621,7 +621,8 @@ EOF
 # ─────────────────────────────────────────────────────────────
 
 run_claude() {
-    claude --model "$CLAUDE_MODEL" --dangerously-skip-permissions -p "$PROMPT"
+    # Wrap in script for PTY - makes Claude stream output like OpenCode
+    script -q /dev/null -c "claude --model \"$CLAUDE_MODEL\" --dangerously-skip-permissions -p \"$PROMPT\""
 }
 
 run_opencode() {
