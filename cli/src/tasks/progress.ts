@@ -38,17 +38,32 @@ export function appendProgress(progressFile: string, result: IterationResult): v
 /**
  * Append a failure message to the progress file
  */
-export function appendFailure(progressFile: string, iteration: number, reason: string, details?: string): void {
-  const entry = [
+export function appendFailure(progressFile: string, iteration: number, reason: string, details?: string, testOutput?: string): void {
+  const lines = [
     "",
     `## FAILED - Iteration ${iteration}`,
     `- Reason: ${reason}`,
-    details ? `- Details: ${details}` : "",
-    "---",
-    "",
-  ].filter(Boolean).join("\n");
+  ];
   
-  appendFileSync(progressFile, entry);
+  if (details) {
+    lines.push(`- Details: ${details}`);
+  }
+  
+  if (testOutput) {
+    // Truncate test output to last 50 lines
+    const outputLines = testOutput.split("\n");
+    const truncated = outputLines.slice(-50).join("\n");
+    lines.push("");
+    lines.push("### Test Output (last 50 lines):");
+    lines.push("```");
+    lines.push(truncated);
+    lines.push("```");
+  }
+  
+  lines.push("---");
+  lines.push("");
+  
+  appendFileSync(progressFile, lines.join("\n"));
 }
 
 /**

@@ -3,7 +3,7 @@ import type { Config } from "../../config/loader.js";
 import { getCurrentModel } from "../../config/loader.js";
 import { ClaudeEngine } from "../../engines/claude.js";
 import { OpenCodeEngine } from "../../engines/opencode.js";
-import { COMPLETE_MARKER, generatePrompt, generateSingleTaskPrompt, type Engine } from "../../engines/base.js";
+import { COMPLETE_MARKER, generatePrompt, generateSingleTaskPrompt, generateFixTestsPrompt, type Engine } from "../../engines/base.js";
 import { parsePrd, getFirstIncompleteTask, countIncompleteTasks, allTasksComplete } from "../../tasks/parser.js";
 import { appendFailure, initProgress, getProgressFile } from "../../tasks/progress.js";
 import { detectTestCommand, verify } from "../../tasks/verification.js";
@@ -123,6 +123,8 @@ export async function runLoop(config: Config, options: RunOptions): Promise<void
   let consecutiveFailures = 0;
   let softLimitRetries = 0;
   let lastFailedTask = "";
+  let testFailureMode = false;
+  let lastTestOutput = "";
 
   while (config.maxIterations === -1 || iteration < config.maxIterations) {
     iteration++;
@@ -141,11 +143,23 @@ export async function runLoop(config: Config, options: RunOptions): Promise<void
       process.exit(0);
     }
 
-    // Log iteration
+    // Log iteration with fix mode indicator
     logIteration(iteration, config.maxIterations, taskName, engine.model);
+    if (testFailureMode) {
+      console.log(pc.yellow("  Mode: FIX TESTS"));
+    }
+
+    // Get the appropriate prompt (normal or fix-tests)
+    const currentPrompt = testFailureMode && lastTestOutput
+      ? generateFixTestsPrompt({
+          testOutput: lastTestOutput,
+          skipCommit: config.skipCommit,
+          progressFile,
+        })
+      : prompt;
 
     // Run engine
-    const result = await engine.run(prompt);
+    const result = await engine.run(currentPrompt);
     logAiOutput(result.output);
     console.log("");
 
@@ -248,11 +262,16 @@ export async function runLoop(config: Config, options: RunOptions): Promise<void
         
         logWarning(`Tests failed, iteration failed (${consecutiveFailures}/${config.maxConsecutiveFailures})`);
         
+        // Set test failure mode and capture test output
+        testFailureMode = true;
+        lastTestOutput = verification.testOutput || "";
+        
         appendFailure(
           progressFile,
           iteration,
           "Tests failed",
-          "Fix the failing tests before marking the task complete"
+          "Fix the failing tests before marking the task complete",
+          verification.testOutput
         );
 
         if (consecutiveFailures >= config.maxConsecutiveFailures) {
@@ -265,13 +284,16 @@ export async function runLoop(config: Config, options: RunOptions): Promise<void
 
         console.log(`  Verification failed (${consecutiveFailures}/${config.maxConsecutiveFailures})`);
         console.log("  Continuing to next iteration to fix...");
+        console.log(pc.yellow("  Next iteration will use fix-tests prompt with test output"));
         await sleep(config.sleepSeconds);
         continue;
       }
 
-      // Reset failure counter on success
+      // Reset failure counter and test failure mode on success
       consecutiveFailures = 0;
       lastFailedTask = "";
+      testFailureMode = false;
+      lastTestOutput = "";
       logInfo("Verification passed");
     }
 

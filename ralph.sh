@@ -427,6 +427,7 @@ run_tests() {
     if [[ -z "$test_cmd" ]]; then
         log "WARN" "No test command detected, skipping verification"
         echo "⚠️  No test command detected, skipping verification"
+        last_test_output=""
         return 0
     fi
     
@@ -443,6 +444,9 @@ run_tests() {
     
     echo "$test_output"
     echo "-------------------------------------------"
+    
+    # Store test output globally for use in fix prompt
+    last_test_output="$test_output"
     
     # Log test output (truncated)
     echo "$test_output" | tail -20 >> "$LOG_FILE"
@@ -617,26 +621,98 @@ EOF
 )
 
 # ─────────────────────────────────────────────────────────────
+# FIX TESTS PROMPT (used when previous iteration had test failures)
+# ─────────────────────────────────────────────────────────────
+
+# This will be built dynamically with the actual test output
+build_fix_tests_prompt() {
+    local test_output="$1"
+    local truncated_output
+    
+    # Truncate test output to last 100 lines to avoid overwhelming the AI
+    truncated_output=$(echo "$test_output" | tail -100)
+    
+    cat <<EOF
+You are Ralph, an autonomous coding agent. Your ONLY task is to FIX THE FAILING TESTS.
+
+## PRIORITY: FIX FAILING TESTS
+
+The previous iteration failed because tests did not pass. You MUST fix the failing tests before doing anything else.
+
+## Test Failure Output
+
+\`\`\`
+$truncated_output
+\`\`\`
+
+## Steps
+
+1. Read the test failure output above carefully.
+2. Read $PROGRESS_FILE - check what was attempted and what failed.
+3. Identify WHY the tests are failing (look at the error messages).
+4. Fix the code or tests to make ALL tests pass.
+5. Run the full test suite to verify ALL tests pass.
+
+## Rules
+
+- Do NOT implement new features
+- Do NOT mark any tasks complete until tests pass
+- Do NOT commit any code until tests pass
+- Focus ONLY on making the existing tests pass
+
+## After Fixing
+
+$COMMIT_INSTRUCTIONS
+
+- Append what you fixed to $PROGRESS_FILE with format:
+
+## Fix Attempt - Iteration [N]
+- Error identified: [what was wrong]
+- Fix applied: [what you changed]
+- Test results: PASS/FAIL
+---
+
+## End Condition
+
+After fixing and tests pass, check PRD.md:
+- If ALL tasks are [x], output exactly: $COMPLETE_MARKER
+- If tasks remain [ ], just end your response (next iteration will continue)
+EOF
+}
+
+# Function to get the appropriate prompt based on test failure mode
+get_current_prompt() {
+    if [[ "$test_failure_mode" -eq 1 ]] && [[ -n "$last_test_output" ]]; then
+        build_fix_tests_prompt "$last_test_output"
+    else
+        echo "$PROMPT"
+    fi
+}
+
+# ─────────────────────────────────────────────────────────────
 # RUN ENGINE
 # ─────────────────────────────────────────────────────────────
 
 run_claude() {
+    local prompt="$1"
     # Wrap in script for PTY - makes Claude stream output like OpenCode
-    script -q /dev/null -c "claude --model \"$CLAUDE_MODEL\" --dangerously-skip-permissions -p \"$PROMPT\""
+    script -q /dev/null -c "claude --model \"$CLAUDE_MODEL\" --dangerously-skip-permissions -p \"$prompt\""
 }
 
 run_opencode() {
+    local prompt="$1"
     # OpenCode requires a PTY to function - script provides a pseudo-TTY wrapper
     # Without this, opencode hangs indefinitely in non-interactive environments
     # (cron, background processes, piped output)
-    script -q /dev/null -c "opencode run --model \"$CURRENT_OC_PRIME_MODEL\" \"$PROMPT\""
+    script -q /dev/null -c "opencode run --model \"$CURRENT_OC_PRIME_MODEL\" \"$prompt\""
 }
 
 run_engine() {
+    local prompt="$1"
     if [[ "$ENGINE" == "claude" ]]; then
-        run_claude
+        run_claude "$prompt"
     else
-        run_opencode
+        run_opencode "$prompt"
     fi
 }
 
@@ -685,6 +761,8 @@ i=0
 consecutive_failures=0
 soft_limit_retries=0
 last_failed_task=""
+test_failure_mode=0
+last_test_output=""
 
 while [[ "$MAX" -eq -1 ]] || [[ "$i" -lt "$MAX" ]]; do
     ((++i))
@@ -706,18 +784,23 @@ while [[ "$MAX" -eq -1 ]] || [[ "$i" -lt "$MAX" ]]; do
         echo "==========================================="
         echo "  Iteration $i (infinite mode) - $display_model"
         echo "  Task: $current_task"
+        [[ "$test_failure_mode" -eq 1 ]] && echo "  Mode: 🔧 FIX TESTS"
         echo "==========================================="
     else
         echo "==========================================="
         echo "  Iteration $i of $MAX - $display_model"
         echo "  Task: $current_task"
+        [[ "$test_failure_mode" -eq 1 ]] && echo "  Mode: 🔧 FIX TESTS"
         echo "==========================================="
     fi
 
+    # Get the appropriate prompt (normal or fix-tests)
+    current_prompt=$(get_current_prompt)
+    
     # Run AI agent
     set +e
     tmpfile=$(mktemp)
-    run_engine 2>&1 | tee "$tmpfile"
+    run_engine "$current_prompt" 2>&1 | tee "$tmpfile"
     exit_code=${PIPESTATUS[0]}
     result=$(cat "$tmpfile")
     rm -f "$tmpfile"
@@ -817,11 +900,23 @@ while [[ "$MAX" -eq -1 ]] || [[ "$i" -lt "$MAX" ]]; do
                 log "WARN" "Tests failed, iteration failed"
                 verification_failed=1
                 
-                # Append to progress file so AI knows
+                # Set test failure mode so next iteration uses fix prompt
+                test_failure_mode=1
+                
+                # Truncate test output for progress file (last 50 lines)
+                local truncated_test_output
+                truncated_test_output=$(echo "$last_test_output" | tail -50)
+                
+                # Append to progress file with actual test output
                 echo "" >> "$PROGRESS_FILE"
                 echo "## FAILED - Iteration $i" >> "$PROGRESS_FILE"
                 echo "- Reason: Tests failed" >> "$PROGRESS_FILE"
                 echo "- Fix the failing tests before marking the task complete" >> "$PROGRESS_FILE"
+                echo "" >> "$PROGRESS_FILE"
+                echo "### Test Output (last 50 lines):" >> "$PROGRESS_FILE"
+                echo "\`\`\`" >> "$PROGRESS_FILE"
+                echo "$truncated_test_output" >> "$PROGRESS_FILE"
+                echo "\`\`\`" >> "$PROGRESS_FILE"
                 echo "---" >> "$PROGRESS_FILE"
             fi
         fi
@@ -850,13 +945,16 @@ while [[ "$MAX" -eq -1 ]] || [[ "$i" -lt "$MAX" ]]; do
             fi
             
             echo "   Continuing to next iteration to fix..."
+            echo "   🔧 Next iteration will use fix-tests prompt with test output"
             sleep "$SLEEP"
             continue
         fi
         
-        # Reset failure counter on success
+        # Reset failure counter and test failure mode on success
         consecutive_failures=0
         last_failed_task=""
+        test_failure_mode=0
+        last_test_output=""
         log "INFO" "Verification passed"
     fi
 

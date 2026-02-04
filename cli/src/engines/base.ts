@@ -39,6 +39,12 @@ export interface PromptOptions {
   progressFile: string;
 }
 
+export interface FixTestsPromptOptions {
+  testOutput: string;
+  skipCommit: boolean;
+  progressFile: string;
+}
+
 /**
  * Generate btca instructions if enabled
  */
@@ -217,4 +223,70 @@ ${btcaEnabled ? `\n${generateBtcaInstructions(btcaResources || [])}` : ""}
 ## End Condition
 
 After completing your task, output exactly: ${COMPLETE_MARKER}`;
+}
+
+/**
+ * Generate prompt for fixing failing tests
+ */
+export function generateFixTestsPrompt(options: FixTestsPromptOptions): string {
+  const { testOutput, skipCommit, progressFile } = options;
+  
+  // Truncate test output to last 100 lines
+  const lines = testOutput.split("\n");
+  const truncatedOutput = lines.slice(-100).join("\n");
+  
+  const commitInstructions = skipCommit
+    ? `- If tests PASS:
+  - Update PRD.md to mark the task complete (change [ ] to [x])
+  - Do NOT commit any changes in this run
+  - Append what worked to ${progressFile}`
+    : `- If tests PASS:
+  - Update PRD.md to mark the task complete (change [ ] to [x])
+  - Commit your changes with message: feat: [task description] (do NOT add Co-Authored-By)
+  - Append what worked to ${progressFile}`;
+
+  return `You are Ralph, an autonomous coding agent. Your ONLY task is to FIX THE FAILING TESTS.
+
+## PRIORITY: FIX FAILING TESTS
+
+The previous iteration failed because tests did not pass. You MUST fix the failing tests before doing anything else.
+
+## Test Failure Output
+
+\`\`\`
+${truncatedOutput}
+\`\`\`
+
+## Steps
+
+1. Read the test failure output above carefully.
+2. Read ${progressFile} - check what was attempted and what failed.
+3. Identify WHY the tests are failing (look at the error messages).
+4. Fix the code or tests to make ALL tests pass.
+5. Run the full test suite to verify ALL tests pass.
+
+## Rules
+
+- Do NOT implement new features
+- Do NOT mark any tasks complete until tests pass
+- Do NOT commit any code until tests pass
+- Focus ONLY on making the existing tests pass
+
+## After Fixing
+
+${commitInstructions}
+
+- Append what you fixed to ${progressFile} with format:
+
+## Fix Attempt - Iteration [N]
+- Error identified: [what was wrong]
+- Fix applied: [what you changed]
+- Test results: PASS/FAIL
+---
+
+## End Condition
+
+After fixing and tests pass, check PRD.md:
+- If ALL tasks are [x], output exactly: ${COMPLETE_MARKER}
+- If tasks remain [ ], just end your response (next iteration will continue)`;
 }
