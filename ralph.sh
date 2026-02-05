@@ -899,7 +899,6 @@ while [[ "$MAX" -eq -1 ]] || [[ "$i" -lt "$MAX" ]]; do
                 test_failure_mode=1
                 
                 # Truncate test output for progress file (last 50 lines)
-                local truncated_test_output
                 truncated_test_output=$(echo "$last_test_output" | tail -50)
                 
                 # Append to progress file with actual test output
