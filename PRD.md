@@ -33,7 +33,7 @@ Ralph processes get SIGKILL'd unexpectedly with no diagnostic information in log
   - On non-zero exit: log last 500 chars of output
   - Test: Simulate non-zero exit and verify error logging
 
-- [ ] **Task 4:** Add signal trapping for graceful shutdown
+- [x] **Task 4:** Add signal trapping for graceful shutdown
   - Trap SIGTERM, SIGINT, SIGHUP
   - On signal: log `[WARN] Received signal: $signal`
   - On signal: log current iteration number and task name

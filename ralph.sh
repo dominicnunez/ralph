@@ -329,6 +329,31 @@ log_resources() {
 }
 
 # ─────────────────────────────────────────────────────────────
+# SIGNAL HANDLING FOR GRACEFUL SHUTDOWN
+# ─────────────────────────────────────────────────────────────
+
+handle_signal() {
+    local signal_name="$1"
+    log "WARN" "Received signal: $signal_name"
+
+    # Log current iteration and task if available
+    if [[ -n "${i:-}" ]]; then
+        log "WARN" "Current iteration: $i"
+    fi
+    if [[ -n "${current_task:-}" ]]; then
+        log "WARN" "Current task: $current_task"
+    fi
+
+    # Exit gracefully
+    exit 130
+}
+
+# Set up signal traps
+trap 'handle_signal SIGTERM' TERM
+trap 'handle_signal SIGINT' INT
+trap 'handle_signal SIGHUP' HUP
+
+# ─────────────────────────────────────────────────────────────
 # TEST COMMAND DETECTION
 # ─────────────────────────────────────────────────────────────
 
