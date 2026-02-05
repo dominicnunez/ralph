@@ -757,6 +757,52 @@ fi
 echo "📝 Log file: $LOG_FILE"
 echo ""
 
+# ─────────────────────────────────────────────────────────────
+# PRE-FLIGHT TEST BASELINE
+# ─────────────────────────────────────────────────────────────
+
+# Temp file to store baseline test failures
+BASELINE_FILE=$(mktemp)
+trap "rm -f $BASELINE_FILE" EXIT
+
+# Run pre-flight test baseline if tests are enabled
+if [[ "$SKIP_TEST_VERIFY" != "1" ]] && [[ -n "$DETECTED_TEST_CMD" ]]; then
+    echo "🔍 Running pre-flight test baseline..."
+    log "INFO" "Running pre-flight test baseline"
+
+    set +e
+    baseline_output=$(eval "$DETECTED_TEST_CMD" 2>&1)
+    baseline_exit_code=$?
+    set -e
+
+    # Store baseline output and exit code
+    echo "$baseline_exit_code" > "$BASELINE_FILE"
+    echo "---BASELINE-OUTPUT---" >> "$BASELINE_FILE"
+    echo "$baseline_output" >> "$BASELINE_FILE"
+
+    if [[ $baseline_exit_code -eq 0 ]]; then
+        echo "✅ Pre-flight baseline: All tests passing"
+        log "INFO" "Pre-flight baseline: All tests passing"
+    else
+        echo "⚠️  Pre-flight baseline: Tests failing (exit code: $baseline_exit_code)"
+        log "WARN" "Pre-flight baseline: Tests failing (exit code: $baseline_exit_code)"
+
+        # Log to progress file
+        echo "" >> "$PROGRESS_FILE"
+        echo "## Pre-flight Test Baseline - $(date '+%Y-%m-%d %H:%M:%S')" >> "$PROGRESS_FILE"
+        echo "- Exit code: $baseline_exit_code" >> "$PROGRESS_FILE"
+        echo "- Status: Pre-existing test failures detected" >> "$PROGRESS_FILE"
+        echo "- These failures will not block PRD work (differential verification enabled)" >> "$PROGRESS_FILE"
+        echo "" >> "$PROGRESS_FILE"
+        echo "### Baseline Test Output (last 50 lines):" >> "$PROGRESS_FILE"
+        echo "\`\`\`" >> "$PROGRESS_FILE"
+        echo "$baseline_output" | tail -50 >> "$PROGRESS_FILE"
+        echo "\`\`\`" >> "$PROGRESS_FILE"
+        echo "---" >> "$PROGRESS_FILE"
+    fi
+    echo ""
+fi
+
 i=0
 consecutive_failures=0
 soft_limit_retries=0
