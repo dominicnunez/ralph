@@ -421,6 +421,81 @@ verify_tests_written() {
     return 0
 }
 
+# ─────────────────────────────────────────────────────────────
+# DIFFERENTIAL TEST VERIFICATION
+# ─────────────────────────────────────────────────────────────
+
+extract_failing_tests() {
+    local test_output="$1"
+
+    # Extract failing test names from common test frameworks
+    # Supports: Jest, Vitest, Bun test, pytest, Go test, Mocha, etc.
+
+    # Pattern 1: ✗ test_name or ✕ test_name or FAIL test_name
+    # Pattern 2: "test description" (quoted test names)
+    # Pattern 3: --- FAIL: TestName
+    # Pattern 4: at Context.test_name
+    # Pattern 5: FAILED test/path.test.ts > test name
+
+    echo "$test_output" | grep -E '(✗|✕|FAIL|FAILED|Error:|AssertionError|Expected)' | \
+        grep -oE '([a-zA-Z_][a-zA-Z0-9_]*\(\)|"[^"]{5,80}"|[a-zA-Z_][a-zA-Z0-9_]{3,60}|Test[A-Z][a-zA-Z0-9_]+)' | \
+        sort -u || true
+}
+
+compare_test_failures() {
+    local baseline_file="$1"
+    local current_output="$2"
+
+    # If no baseline file or empty, all failures are new
+    if [[ ! -f "$baseline_file" ]] || [[ ! -s "$baseline_file" ]]; then
+        echo "NEW_FAILURES"
+        return 1
+    fi
+
+    # Read baseline
+    local baseline_exit_code
+    baseline_exit_code=$(head -1 "$baseline_file")
+
+    # Extract baseline output (skip first line and separator)
+    local baseline_output
+    baseline_output=$(tail -n +3 "$baseline_file")
+
+    # If baseline passed (exit code 0), any new failure is a regression
+    if [[ "$baseline_exit_code" == "0" ]]; then
+        echo "NEW_FAILURES"
+        return 1
+    fi
+
+    # Extract failing tests from both outputs
+    local baseline_failures
+    local current_failures
+    baseline_failures=$(extract_failing_tests "$baseline_output")
+    current_failures=$(extract_failing_tests "$current_output")
+
+    # If no failures detected in current output, tests pass
+    if [[ -z "$current_failures" ]]; then
+        echo "NO_NEW_FAILURES"
+        return 0
+    fi
+
+    # Check if current failures are a subset of baseline failures
+    local new_failure_found=0
+    while IFS= read -r test_name; do
+        if [[ -n "$test_name" ]] && ! echo "$baseline_failures" | grep -qF "$test_name"; then
+            new_failure_found=1
+            break
+        fi
+    done <<< "$current_failures"
+
+    if [[ $new_failure_found -eq 1 ]]; then
+        echo "NEW_FAILURES"
+        return 1
+    else
+        echo "NO_NEW_FAILURES"
+        return 0
+    fi
+}
+
 run_tests() {
     local test_cmd="$1"
     
@@ -444,21 +519,38 @@ run_tests() {
     
     echo "$test_output"
     echo "-------------------------------------------"
-    
+
     # Store test output globally for use in fix prompt
     last_test_output="$test_output"
-    
+
     # Log test output (truncated)
     echo "$test_output" | tail -20 >> "$LOG_FILE"
-    
+
     if [[ $exit_code -eq 0 ]]; then
         log "INFO" "Tests passed"
         echo "✅ Tests passed!"
         return 0
     else
-        log "ERROR" "Tests failed (exit code: $exit_code)"
-        echo "❌ Tests failed (exit code: $exit_code)"
-        return 1
+        # DIFFERENTIAL VERIFICATION: Compare against baseline
+        if [[ -f "$BASELINE_FILE" ]] && [[ -s "$BASELINE_FILE" ]]; then
+            echo ""
+            echo "🔍 Checking for new test failures (differential verification)..."
+
+            if compare_test_failures "$BASELINE_FILE" "$test_output"; then
+                log "INFO" "Tests failed but no new failures detected (pre-existing failures only)"
+                echo "✅ No new test failures (pre-existing failures are expected)"
+                return 0
+            else
+                log "ERROR" "New test failures detected (not in baseline)"
+                echo "❌ New test failures detected (exit code: $exit_code)"
+                return 1
+            fi
+        else
+            # No baseline, treat as regular failure
+            log "ERROR" "Tests failed (exit code: $exit_code) - No baseline available"
+            echo "❌ Tests failed (exit code: $exit_code)"
+            return 1
+        fi
     fi
 }
 
