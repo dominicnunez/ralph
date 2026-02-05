@@ -21,7 +21,7 @@ Ralph processes get SIGKILL'd unexpectedly with no diagnostic information in log
   - Call at the start of each iteration
   - Test: Verify resource log line appears in output
 
-- [ ] **Task 2:** Add iteration timing
+- [x] **Task 2:** Add iteration timing
   - Record start time at iteration begin
   - Log duration at iteration end: `[INFO] Iteration $i completed in ${duration}s`
   - Test: Verify timing log appears with reasonable duration value

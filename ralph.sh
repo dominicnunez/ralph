@@ -788,6 +788,9 @@ while [[ "$MAX" -eq -1 ]] || [[ "$i" -lt "$MAX" ]]; do
     log_iteration "$i" "$current_task"
     log_resources
 
+    # Record iteration start time for duration tracking
+    iteration_start_time=$(date +%s)
+
     # Build display model name
     if [[ "$ENGINE" == "claude" ]]; then
         display_model="$CLAUDE_MODEL"
@@ -941,6 +944,12 @@ while [[ "$MAX" -eq -1 ]] || [[ "$i" -lt "$MAX" ]]; do
             echo "⚠️  Verification failed — retrying next iteration"
             echo "   🔧 Next iteration will use fix-tests prompt with test output"
             log "WARN" "Verification failed on task '$current_task', will retry"
+
+            # Log iteration timing before retry
+            iteration_end_time=$(date +%s)
+            iteration_duration=$((iteration_end_time - iteration_start_time))
+            log "INFO" "Iteration $i completed in ${iteration_duration}s"
+
             sleep "$SLEEP"
             continue
         fi
@@ -1002,6 +1011,12 @@ while [[ "$MAX" -eq -1 ]] || [[ "$i" -lt "$MAX" ]]; do
                 echo "  Continuing to next iteration..."
                 echo "==========================================="
                 log "WARN" "AI claimed complete but $incomplete_count tasks remain"
+
+                # Log iteration timing before retry
+                iteration_end_time=$(date +%s)
+                iteration_duration=$((iteration_end_time - iteration_start_time))
+                log "INFO" "Iteration $i completed in ${iteration_duration}s"
+
                 sleep "$SLEEP"
                 continue
             fi
@@ -1019,6 +1034,12 @@ while [[ "$MAX" -eq -1 ]] || [[ "$i" -lt "$MAX" ]]; do
                 echo "  Continuing to fix..."
                 echo "==========================================="
                 log "ERROR" "Final verification failed"
+
+                # Log iteration timing before retry
+                iteration_end_time=$(date +%s)
+                iteration_duration=$((iteration_end_time - iteration_start_time))
+                log "INFO" "Iteration $i completed in ${iteration_duration}s"
+
                 sleep "$SLEEP"
                 continue
             fi
@@ -1049,6 +1070,11 @@ while [[ "$MAX" -eq -1 ]] || [[ "$i" -lt "$MAX" ]]; do
         echo "==========================================="
         exit 0
     fi
+
+    # Log iteration completion time
+    iteration_end_time=$(date +%s)
+    iteration_duration=$((iteration_end_time - iteration_start_time))
+    log "INFO" "Iteration $i completed in ${iteration_duration}s"
 
     sleep "$SLEEP"
 done
