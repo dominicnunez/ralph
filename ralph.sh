@@ -30,8 +30,6 @@ ENV_MAX_ITERATIONS=${MAX_ITERATIONS-}
 ENV_SLEEP_SECONDS=${SLEEP_SECONDS-}
 ENV_SKIP_COMMIT=${SKIP_COMMIT-}
 ENV_PUSH_AFTER_COMMIT=${PUSH_AFTER_COMMIT-}
-ENV_MAX_CONSECUTIVE_FAILURES=${MAX_CONSECUTIVE_FAILURES-}
-
 # Claude settings
 ENV_CLAUDE_MODEL=${CLAUDE_MODEL-}
 
@@ -101,10 +99,6 @@ PUSH_AFTER_COMMIT=0
 # Skip test verification (1 = dont check for tests, not recommended)
 SKIP_TEST_VERIFY=0
 
-# Maximum consecutive failures before stopping (default: 3)
-# Only counts failures on the SAME task - resets when task changes
-MAX_CONSECUTIVE_FAILURES=3
-
 # ─────────────────────────────────────────────────────────────
 # Test Settings
 # ─────────────────────────────────────────────────────────────
@@ -167,7 +161,6 @@ fi
 [[ -n "$ENV_SLEEP_SECONDS" ]] && SLEEP_SECONDS="$ENV_SLEEP_SECONDS"
 [[ -n "$ENV_SKIP_COMMIT" ]] && SKIP_COMMIT="$ENV_SKIP_COMMIT"
 [[ -n "$ENV_PUSH_AFTER_COMMIT" ]] && PUSH_AFTER_COMMIT="$ENV_PUSH_AFTER_COMMIT"
-[[ -n "$ENV_MAX_CONSECUTIVE_FAILURES" ]] && MAX_CONSECUTIVE_FAILURES="$ENV_MAX_CONSECUTIVE_FAILURES"
 [[ -n "$ENV_CLAUDE_MODEL" ]] && CLAUDE_MODEL="$ENV_CLAUDE_MODEL"
 [[ -n "$ENV_OC_PRIME_MODEL" ]] && OC_PRIME_MODEL="$ENV_OC_PRIME_MODEL"
 [[ -n "$ENV_OC_FALL_MODEL" ]] && OC_FALL_MODEL="$ENV_OC_FALL_MODEL"
@@ -425,77 +418,6 @@ verify_tests_written() {
 # DIFFERENTIAL TEST VERIFICATION
 # ─────────────────────────────────────────────────────────────
 
-extract_failing_tests() {
-    local test_output="$1"
-
-    # Extract failing test names from common test frameworks
-    # Supports: Jest, Vitest, Bun test, pytest, Go test, Mocha, etc.
-
-    # Pattern 1: ✗ test_name or ✕ test_name or FAIL test_name
-    # Pattern 2: "test description" (quoted test names)
-    # Pattern 3: --- FAIL: TestName
-    # Pattern 4: at Context.test_name
-    # Pattern 5: FAILED test/path.test.ts > test name
-
-    echo "$test_output" | grep -E '(✗|✕|FAIL|FAILED|Error:|AssertionError|Expected)' | \
-        grep -oE '([a-zA-Z_][a-zA-Z0-9_]*\(\)|"[^"]{5,80}"|[a-zA-Z_][a-zA-Z0-9_]{3,60}|Test[A-Z][a-zA-Z0-9_]+)' | \
-        sort -u || true
-}
-
-compare_test_failures() {
-    local baseline_file="$1"
-    local current_output="$2"
-
-    # If no baseline file or empty, all failures are new
-    if [[ ! -f "$baseline_file" ]] || [[ ! -s "$baseline_file" ]]; then
-        echo "NEW_FAILURES"
-        return 1
-    fi
-
-    # Read baseline
-    local baseline_exit_code
-    baseline_exit_code=$(head -1 "$baseline_file")
-
-    # Extract baseline output (skip first line and separator)
-    local baseline_output
-    baseline_output=$(tail -n +3 "$baseline_file")
-
-    # If baseline passed (exit code 0), any new failure is a regression
-    if [[ "$baseline_exit_code" == "0" ]]; then
-        echo "NEW_FAILURES"
-        return 1
-    fi
-
-    # Extract failing tests from both outputs
-    local baseline_failures
-    local current_failures
-    baseline_failures=$(extract_failing_tests "$baseline_output")
-    current_failures=$(extract_failing_tests "$current_output")
-
-    # If no failures detected in current output, tests pass
-    if [[ -z "$current_failures" ]]; then
-        echo "NO_NEW_FAILURES"
-        return 0
-    fi
-
-    # Check if current failures are a subset of baseline failures
-    local new_failure_found=0
-    while IFS= read -r test_name; do
-        if [[ -n "$test_name" ]] && ! echo "$baseline_failures" | grep -qF "$test_name"; then
-            new_failure_found=1
-            break
-        fi
-    done <<< "$current_failures"
-
-    if [[ $new_failure_found -eq 1 ]]; then
-        echo "NEW_FAILURES"
-        return 1
-    else
-        echo "NO_NEW_FAILURES"
-        return 0
-    fi
-}
-
 run_tests() {
     local test_cmd="$1"
     
@@ -531,26 +453,9 @@ run_tests() {
         echo "✅ Tests passed!"
         return 0
     else
-        # DIFFERENTIAL VERIFICATION: Compare against baseline
-        if [[ -f "$BASELINE_FILE" ]] && [[ -s "$BASELINE_FILE" ]]; then
-            echo ""
-            echo "🔍 Checking for new test failures (differential verification)..."
-
-            if compare_test_failures "$BASELINE_FILE" "$test_output"; then
-                log "INFO" "Tests failed but no new failures detected (pre-existing failures only)"
-                echo "✅ No new test failures (pre-existing failures are expected)"
-                return 0
-            else
-                log "ERROR" "New test failures detected (not in baseline)"
-                echo "❌ New test failures detected (exit code: $exit_code)"
-                return 1
-            fi
-        else
-            # No baseline, treat as regular failure
-            log "ERROR" "Tests failed (exit code: $exit_code) - No baseline available"
-            echo "❌ Tests failed (exit code: $exit_code)"
-            return 1
-        fi
+        log "ERROR" "Tests failed (exit code: $exit_code)"
+        echo "❌ Tests failed (exit code: $exit_code)"
+        return 1
     fi
 }
 
@@ -849,184 +754,8 @@ fi
 echo "📝 Log file: $LOG_FILE"
 echo ""
 
-# ─────────────────────────────────────────────────────────────
-# PRE-FLIGHT TEST BASELINE
-# ─────────────────────────────────────────────────────────────
-
-# Temp file to store baseline test failures
-BASELINE_FILE=$(mktemp)
-trap "rm -f $BASELINE_FILE" EXIT
-
-# Run pre-flight test baseline if tests are enabled
-if [[ "$SKIP_TEST_VERIFY" != "1" ]] && [[ -n "$DETECTED_TEST_CMD" ]]; then
-    echo "🔍 Running pre-flight test baseline..."
-    log "INFO" "Running pre-flight test baseline"
-
-    set +e
-    baseline_output=$(eval "$DETECTED_TEST_CMD" 2>&1)
-    baseline_exit_code=$?
-    set -e
-
-    # Store baseline output and exit code
-    echo "$baseline_exit_code" > "$BASELINE_FILE"
-    echo "---BASELINE-OUTPUT---" >> "$BASELINE_FILE"
-    echo "$baseline_output" >> "$BASELINE_FILE"
-
-    if [[ $baseline_exit_code -eq 0 ]]; then
-        echo "✅ Pre-flight baseline: All tests passing"
-        log "INFO" "Pre-flight baseline: All tests passing"
-    else
-        echo "⚠️  Pre-flight baseline: Tests failing (exit code: $baseline_exit_code)"
-        log "WARN" "Pre-flight baseline: Tests failing (exit code: $baseline_exit_code)"
-
-        # Extract failing test names
-        failing_tests=$(extract_failing_tests "$baseline_output")
-
-        # Log to progress file
-        echo "" >> "$PROGRESS_FILE"
-        echo "## Pre-flight Test Baseline - $(date '+%Y-%m-%d %H:%M:%S')" >> "$PROGRESS_FILE"
-        echo "- Exit code: $baseline_exit_code" >> "$PROGRESS_FILE"
-        echo "- Status: Pre-existing test failures detected" >> "$PROGRESS_FILE"
-        echo "" >> "$PROGRESS_FILE"
-        echo "### Failing Tests:" >> "$PROGRESS_FILE"
-        if [[ -n "$failing_tests" ]]; then
-            echo "$failing_tests" | while IFS= read -r test; do
-                echo "  - $test" >> "$PROGRESS_FILE"
-            done
-        else
-            echo "  - (Unable to parse test names - check output below)" >> "$PROGRESS_FILE"
-        fi
-        echo "" >> "$PROGRESS_FILE"
-        echo "**These will not block PRD work.** Attempting auto-fix first." >> "$PROGRESS_FILE"
-        echo "" >> "$PROGRESS_FILE"
-        echo "### Baseline Test Output (last 50 lines):" >> "$PROGRESS_FILE"
-        echo "\`\`\`" >> "$PROGRESS_FILE"
-        echo "$baseline_output" | tail -50 >> "$PROGRESS_FILE"
-        echo "\`\`\`" >> "$PROGRESS_FILE"
-        echo "---" >> "$PROGRESS_FILE"
-    fi
-    echo ""
-fi
-
-# ─────────────────────────────────────────────────────────────
-# AUTO-FIX PRE-EXISTING TEST FAILURES
-# ─────────────────────────────────────────────────────────────
-
-# If pre-flight baseline has failures, attempt to fix them before PRD tasks
-if [[ "$SKIP_TEST_VERIFY" != "1" ]] && [[ -n "$DETECTED_TEST_CMD" ]] && [[ -f "$BASELINE_FILE" ]] && [[ -s "$BASELINE_FILE" ]]; then
-    baseline_exit_code=$(head -1 "$BASELINE_FILE")
-    baseline_output=$(tail -n +3 "$BASELINE_FILE")
-
-    if [[ "$baseline_exit_code" != "0" ]]; then
-        echo "🔧 Pre-existing test failures detected. Attempting auto-fix..."
-        log "INFO" "Auto-fix: Attempting to fix pre-existing test failures"
-
-        # Log to progress file
-        echo "" >> "$PROGRESS_FILE"
-        echo "## Auto-fix Pre-existing Failures - $(date '+%Y-%m-%d %H:%M:%S')" >> "$PROGRESS_FILE"
-        echo "- Pre-existing test failures detected in baseline" >> "$PROGRESS_FILE"
-        echo "- Attempting to fix before starting PRD tasks" >> "$PROGRESS_FILE"
-        echo "- Max attempts: $MAX_CONSECUTIVE_FAILURES" >> "$PROGRESS_FILE"
-        echo "---" >> "$PROGRESS_FILE"
-
-        autofix_attempts=0
-        autofix_success=0
-
-        while [[ $autofix_attempts -lt $MAX_CONSECUTIVE_FAILURES ]]; do
-            ((autofix_attempts++))
-
-            echo ""
-            echo "==========================================="
-            echo "  Auto-fix Attempt $autofix_attempts of $MAX_CONSECUTIVE_FAILURES"
-            echo "==========================================="
-            log "INFO" "Auto-fix attempt $autofix_attempts of $MAX_CONSECUTIVE_FAILURES"
-
-            # Build fix prompt with baseline test output
-            autofix_prompt=$(build_fix_tests_prompt "$baseline_output")
-
-            # Run AI agent to fix tests
-            set +e
-            tmpfile=$(mktemp)
-            run_engine "$autofix_prompt" 2>&1 | tee "$tmpfile"
-            exit_code=${PIPESTATUS[0]}
-            result=$(cat "$tmpfile")
-            rm -f "$tmpfile"
-            set -e
-
-            # Log AI output (truncated)
-            echo "$result" | head -50 >> "$LOG_FILE"
-            echo "[... truncated ...]" >> "$LOG_FILE"
-
-            # Handle engine errors
-            if [[ $exit_code -ne 0 ]]; then
-                log "ERROR" "$ENGINE failed during auto-fix with exit code $exit_code"
-                echo "Error from $ENGINE during auto-fix (exit code $exit_code)"
-                break
-            fi
-
-            # Run tests again to check if fixed
-            echo ""
-            echo "🧪 Re-running tests after auto-fix..."
-
-            set +e
-            test_output=$(eval "$DETECTED_TEST_CMD" 2>&1)
-            test_exit_code=$?
-            set -e
-
-            echo "$test_output"
-            echo "-------------------------------------------"
-
-            if [[ $test_exit_code -eq 0 ]]; then
-                echo "✅ Auto-fix successful! All tests now passing."
-                log "INFO" "Auto-fix successful: All tests passing after $autofix_attempts attempts"
-
-                # Update baseline with new passing status
-                echo "0" > "$BASELINE_FILE"
-                echo "---BASELINE-OUTPUT---" >> "$BASELINE_FILE"
-                echo "$test_output" >> "$BASELINE_FILE"
-
-                # Log success to progress file
-                echo "" >> "$PROGRESS_FILE"
-                echo "## Auto-fix Success - Attempt $autofix_attempts" >> "$PROGRESS_FILE"
-                echo "- All pre-existing test failures have been fixed" >> "$PROGRESS_FILE"
-                echo "- Baseline updated: All tests now passing" >> "$PROGRESS_FILE"
-                echo "- Proceeding with PRD tasks" >> "$PROGRESS_FILE"
-                echo "---" >> "$PROGRESS_FILE"
-
-                autofix_success=1
-                break
-            else
-                echo "⚠️  Tests still failing after auto-fix attempt $autofix_attempts"
-                log "WARN" "Auto-fix attempt $autofix_attempts: Tests still failing"
-
-                # Update baseline output for next attempt
-                baseline_output="$test_output"
-            fi
-        done
-
-        if [[ $autofix_success -eq 0 ]]; then
-            echo ""
-            echo "⚠️  Auto-fix could not resolve all pre-existing failures after $MAX_CONSECUTIVE_FAILURES attempts"
-            echo "   Proceeding with PRD tasks anyway (differential verification enabled)"
-            log "WARN" "Auto-fix unsuccessful after $MAX_CONSECUTIVE_FAILURES attempts, proceeding with differential verification"
-
-            # Log to progress file
-            echo "" >> "$PROGRESS_FILE"
-            echo "## Auto-fix Incomplete - After $MAX_CONSECUTIVE_FAILURES Attempts" >> "$PROGRESS_FILE"
-            echo "- Could not fix all pre-existing test failures" >> "$PROGRESS_FILE"
-            echo "- Proceeding with PRD tasks using differential verification" >> "$PROGRESS_FILE"
-            echo "- Only NEW test failures will block PRD work" >> "$PROGRESS_FILE"
-            echo "---" >> "$PROGRESS_FILE"
-        fi
-
-        echo ""
-    fi
-fi
-
 i=0
-consecutive_failures=0
 soft_limit_retries=0
-last_failed_task=""
 test_failure_mode=0
 last_test_output=""
 
@@ -1189,36 +918,15 @@ while [[ "$MAX" -eq -1 ]] || [[ "$i" -lt "$MAX" ]]; do
         
         # Handle verification failure
         if [[ $verification_failed -eq 1 ]]; then
-            # Only increment if same task is failing
-            if [[ "$current_task" != "$last_failed_task" ]]; then
-                consecutive_failures=1
-                last_failed_task="$current_task"
-                log "INFO" "Task changed, resetting failure counter"
-            else
-                ((consecutive_failures++))
-            fi
-            
             echo ""
-            echo "⚠️  Verification failed ($consecutive_failures/$MAX_CONSECUTIVE_FAILURES)"
-            log "WARN" "Consecutive failures on task '$current_task': $consecutive_failures"
-            
-            if [[ $consecutive_failures -ge $MAX_CONSECUTIVE_FAILURES ]]; then
-                log "ERROR" "Too many consecutive failures on task '$current_task', stopping"
-                echo "❌ Too many consecutive failures on this task"
-                echo "   Manual intervention required"
-                echo "   Check log: $LOG_FILE"
-                exit 1
-            fi
-            
-            echo "   Continuing to next iteration to fix..."
+            echo "⚠️  Verification failed — retrying next iteration"
             echo "   🔧 Next iteration will use fix-tests prompt with test output"
+            log "WARN" "Verification failed on task '$current_task', will retry"
             sleep "$SLEEP"
             continue
         fi
         
-        # Reset failure counter and test failure mode on success
-        consecutive_failures=0
-        last_failed_task=""
+        # Reset test failure mode on success
         test_failure_mode=0
         last_test_output=""
         log "INFO" "Verification passed"
