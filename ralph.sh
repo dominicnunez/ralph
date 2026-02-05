@@ -879,12 +879,25 @@ if [[ "$SKIP_TEST_VERIFY" != "1" ]] && [[ -n "$DETECTED_TEST_CMD" ]]; then
         echo "⚠️  Pre-flight baseline: Tests failing (exit code: $baseline_exit_code)"
         log "WARN" "Pre-flight baseline: Tests failing (exit code: $baseline_exit_code)"
 
+        # Extract failing test names
+        failing_tests=$(extract_failing_tests "$baseline_output")
+
         # Log to progress file
         echo "" >> "$PROGRESS_FILE"
         echo "## Pre-flight Test Baseline - $(date '+%Y-%m-%d %H:%M:%S')" >> "$PROGRESS_FILE"
         echo "- Exit code: $baseline_exit_code" >> "$PROGRESS_FILE"
         echo "- Status: Pre-existing test failures detected" >> "$PROGRESS_FILE"
-        echo "- These failures will not block PRD work (differential verification enabled)" >> "$PROGRESS_FILE"
+        echo "" >> "$PROGRESS_FILE"
+        echo "### Failing Tests:" >> "$PROGRESS_FILE"
+        if [[ -n "$failing_tests" ]]; then
+            echo "$failing_tests" | while IFS= read -r test; do
+                echo "  - $test" >> "$PROGRESS_FILE"
+            done
+        else
+            echo "  - (Unable to parse test names - check output below)" >> "$PROGRESS_FILE"
+        fi
+        echo "" >> "$PROGRESS_FILE"
+        echo "**These will not block PRD work.** Attempting auto-fix first." >> "$PROGRESS_FILE"
         echo "" >> "$PROGRESS_FILE"
         echo "### Baseline Test Output (last 50 lines):" >> "$PROGRESS_FILE"
         echo "\`\`\`" >> "$PROGRESS_FILE"
@@ -893,6 +906,121 @@ if [[ "$SKIP_TEST_VERIFY" != "1" ]] && [[ -n "$DETECTED_TEST_CMD" ]]; then
         echo "---" >> "$PROGRESS_FILE"
     fi
     echo ""
+fi
+
+# ─────────────────────────────────────────────────────────────
+# AUTO-FIX PRE-EXISTING TEST FAILURES
+# ─────────────────────────────────────────────────────────────
+
+# If pre-flight baseline has failures, attempt to fix them before PRD tasks
+if [[ "$SKIP_TEST_VERIFY" != "1" ]] && [[ -n "$DETECTED_TEST_CMD" ]] && [[ -f "$BASELINE_FILE" ]] && [[ -s "$BASELINE_FILE" ]]; then
+    baseline_exit_code=$(head -1 "$BASELINE_FILE")
+    baseline_output=$(tail -n +3 "$BASELINE_FILE")
+
+    if [[ "$baseline_exit_code" != "0" ]]; then
+        echo "🔧 Pre-existing test failures detected. Attempting auto-fix..."
+        log "INFO" "Auto-fix: Attempting to fix pre-existing test failures"
+
+        # Log to progress file
+        echo "" >> "$PROGRESS_FILE"
+        echo "## Auto-fix Pre-existing Failures - $(date '+%Y-%m-%d %H:%M:%S')" >> "$PROGRESS_FILE"
+        echo "- Pre-existing test failures detected in baseline" >> "$PROGRESS_FILE"
+        echo "- Attempting to fix before starting PRD tasks" >> "$PROGRESS_FILE"
+        echo "- Max attempts: $MAX_CONSECUTIVE_FAILURES" >> "$PROGRESS_FILE"
+        echo "---" >> "$PROGRESS_FILE"
+
+        autofix_attempts=0
+        autofix_success=0
+
+        while [[ $autofix_attempts -lt $MAX_CONSECUTIVE_FAILURES ]]; do
+            ((autofix_attempts++))
+
+            echo ""
+            echo "==========================================="
+            echo "  Auto-fix Attempt $autofix_attempts of $MAX_CONSECUTIVE_FAILURES"
+            echo "==========================================="
+            log "INFO" "Auto-fix attempt $autofix_attempts of $MAX_CONSECUTIVE_FAILURES"
+
+            # Build fix prompt with baseline test output
+            autofix_prompt=$(build_fix_tests_prompt "$baseline_output")
+
+            # Run AI agent to fix tests
+            set +e
+            tmpfile=$(mktemp)
+            run_engine "$autofix_prompt" 2>&1 | tee "$tmpfile"
+            exit_code=${PIPESTATUS[0]}
+            result=$(cat "$tmpfile")
+            rm -f "$tmpfile"
+            set -e
+
+            # Log AI output (truncated)
+            echo "$result" | head -50 >> "$LOG_FILE"
+            echo "[... truncated ...]" >> "$LOG_FILE"
+
+            # Handle engine errors
+            if [[ $exit_code -ne 0 ]]; then
+                log "ERROR" "$ENGINE failed during auto-fix with exit code $exit_code"
+                echo "Error from $ENGINE during auto-fix (exit code $exit_code)"
+                break
+            fi
+
+            # Run tests again to check if fixed
+            echo ""
+            echo "🧪 Re-running tests after auto-fix..."
+
+            set +e
+            test_output=$(eval "$DETECTED_TEST_CMD" 2>&1)
+            test_exit_code=$?
+            set -e
+
+            echo "$test_output"
+            echo "-------------------------------------------"
+
+            if [[ $test_exit_code -eq 0 ]]; then
+                echo "✅ Auto-fix successful! All tests now passing."
+                log "INFO" "Auto-fix successful: All tests passing after $autofix_attempts attempts"
+
+                # Update baseline with new passing status
+                echo "0" > "$BASELINE_FILE"
+                echo "---BASELINE-OUTPUT---" >> "$BASELINE_FILE"
+                echo "$test_output" >> "$BASELINE_FILE"
+
+                # Log success to progress file
+                echo "" >> "$PROGRESS_FILE"
+                echo "## Auto-fix Success - Attempt $autofix_attempts" >> "$PROGRESS_FILE"
+                echo "- All pre-existing test failures have been fixed" >> "$PROGRESS_FILE"
+                echo "- Baseline updated: All tests now passing" >> "$PROGRESS_FILE"
+                echo "- Proceeding with PRD tasks" >> "$PROGRESS_FILE"
+                echo "---" >> "$PROGRESS_FILE"
+
+                autofix_success=1
+                break
+            else
+                echo "⚠️  Tests still failing after auto-fix attempt $autofix_attempts"
+                log "WARN" "Auto-fix attempt $autofix_attempts: Tests still failing"
+
+                # Update baseline output for next attempt
+                baseline_output="$test_output"
+            fi
+        done
+
+        if [[ $autofix_success -eq 0 ]]; then
+            echo ""
+            echo "⚠️  Auto-fix could not resolve all pre-existing failures after $MAX_CONSECUTIVE_FAILURES attempts"
+            echo "   Proceeding with PRD tasks anyway (differential verification enabled)"
+            log "WARN" "Auto-fix unsuccessful after $MAX_CONSECUTIVE_FAILURES attempts, proceeding with differential verification"
+
+            # Log to progress file
+            echo "" >> "$PROGRESS_FILE"
+            echo "## Auto-fix Incomplete - After $MAX_CONSECUTIVE_FAILURES Attempts" >> "$PROGRESS_FILE"
+            echo "- Could not fix all pre-existing test failures" >> "$PROGRESS_FILE"
+            echo "- Proceeding with PRD tasks using differential verification" >> "$PROGRESS_FILE"
+            echo "- Only NEW test failures will block PRD work" >> "$PROGRESS_FILE"
+            echo "---" >> "$PROGRESS_FILE"
+        fi
+
+        echo ""
+    fi
 fi
 
 i=0
