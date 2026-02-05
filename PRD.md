@@ -40,7 +40,7 @@ Ralph processes get SIGKILL'd unexpectedly with no diagnostic information in log
   - Test: Send SIGTERM to process and verify signal log appears
 
 ### Phase 3: State Persistence
-- [ ] **Task 5:** Save iteration state for resume capability
+- [x] **Task 5:** Save iteration state for resume capability
   - On each iteration start: write current iteration to `$STATE_DIR/last_iteration`
   - On each iteration start: write current task to `$STATE_DIR/last_task`
   - On signal: state is already saved, log points to it

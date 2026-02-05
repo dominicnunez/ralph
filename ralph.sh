@@ -21,6 +21,9 @@ LOG_FILE="$LOG_DIR/ralph-${PROJECT_NAME}.log"
 PROGRESS_DIR="$HOME/.ralph/progress"
 PROGRESS_FILE="$PROGRESS_DIR/progress-${PROJECT_NAME}.log"
 
+# State directory for resume capability (per-project)
+STATE_DIR="$HOME/.ralph/state/${PROJECT_NAME}"
+
 # ─────────────────────────────────────────────────────────────
 # PRESERVE ENVIRONMENT OVERRIDES BEFORE SOURCING CONFIG
 # ─────────────────────────────────────────────────────────────
@@ -272,6 +275,7 @@ setup_opencode_permissions
 setup_logging() {
     mkdir -p "$LOG_DIR"
     mkdir -p "$PROGRESS_DIR"
+    mkdir -p "$STATE_DIR"
     echo "" >> "$LOG_FILE"
     echo "═══════════════════════════════════════════════════════════════" >> "$LOG_FILE"
     echo "  Ralph Session Started: $(date '+%Y-%m-%d %H:%M:%S')" >> "$LOG_FILE"
@@ -343,6 +347,10 @@ handle_signal() {
     if [[ -n "${current_task:-}" ]]; then
         log "WARN" "Current task: $current_task"
     fi
+
+    # State files are saved at iteration start
+    # Point to state directory for resume information
+    log "INFO" "State saved in: $STATE_DIR"
 
     # Exit gracefully
     exit 130
@@ -810,6 +818,11 @@ while [[ "$MAX" -eq -1 ]] || [[ "$i" -lt "$MAX" ]]; do
     head_before=$(git rev-parse HEAD 2>/dev/null || echo "")
     
     current_task=$(get_current_task)
+
+    # Save iteration state for resume capability
+    echo "$i" > "$STATE_DIR/last_iteration"
+    echo "$current_task" > "$STATE_DIR/last_task"
+
     log_iteration "$i" "$current_task"
     log_resources
 
