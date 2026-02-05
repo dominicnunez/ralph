@@ -309,6 +309,25 @@ log_iteration() {
     echo "───────────────────────────────────────────────────────────────" >> "$LOG_FILE"
 }
 
+log_resources() {
+    # Get memory usage
+    if command -v free &> /dev/null; then
+        local mem_info=$(free -m | awk 'NR==2 {printf "Memory %dMB/%dMB", $3, $2}')
+    else
+        local mem_info="Memory info unavailable"
+    fi
+
+    # Get system load average
+    if [[ -f /proc/loadavg ]]; then
+        local load_avg=$(cat /proc/loadavg | awk '{print $1}')
+        local load_info="Load: $load_avg"
+    else
+        local load_info="Load info unavailable"
+    fi
+
+    log "INFO" "Resources: $mem_info, $load_info"
+}
+
 # ─────────────────────────────────────────────────────────────
 # TEST COMMAND DETECTION
 # ─────────────────────────────────────────────────────────────
@@ -767,7 +786,8 @@ while [[ "$MAX" -eq -1 ]] || [[ "$i" -lt "$MAX" ]]; do
     
     current_task=$(get_current_task)
     log_iteration "$i" "$current_task"
-    
+    log_resources
+
     # Build display model name
     if [[ "$ENGINE" == "claude" ]]; then
         display_model="$CLAUDE_MODEL"

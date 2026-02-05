@@ -1,27 +1,55 @@
-# PRD: Pre-flight Test Baseline + Smarter Self-Healing
+# PRD: Ralph Logging Improvements
 
-## Problem
+## Context
+Ralph processes get SIGKILL'd unexpectedly with no diagnostic information in logs. Need better visibility into process state and resource usage to diagnose failures post-mortem.
 
-When tests are already failing before Ralph starts (pre-existing failures unrelated to PRD tasks), Ralph's self-healing loop wastes iterations trying to "fix" failures he didn't cause, then exits after MAX_CONSECUTIVE_FAILURES.
+## Goals
+1. Log resource usage at each iteration start
+2. Capture Claude Code exit codes and last output on failure
+3. Trap catchable signals and log state before exit
+4. Track iteration timing to identify hangs
 
-**Current behavior:**
-1. Ralph implements a task
-2. ralph.sh runs full test suite
-3. Pre-existing test failures trigger fix mode
-4. Ralph burns 3 iterations confused about failures he didn't cause
-5. Exits with error — blocks all PRD work
-
-**Expected behavior:**
-Ralph should detect pre-existing failures, handle them separately, and not let them block PRD task work.
+## Non-Goals
+- Can't trap SIGKILL (impossible by design)
+- Not implementing external watchdog monitoring (separate concern)
 
 ## Tasks
 
-- [x] **Task 1: Pre-flight test baseline** — Before iteration 1, run the test suite and capture results. Store which tests were already failing (test names + exit code) in a variable/temp file. Log the baseline to the progress file so Ralph has context.
+### Phase 1: Core Logging Infrastructure
+- [x] **Task 1:** Add `log_resources()` function that logs memory usage and system load
+  - Log format: `[INFO] Resources: Memory ${used}/${total}MB, Load: ${load}`
+  - Call at the start of each iteration
+  - Test: Verify resource log line appears in output
 
-- [x] **Task 2: Differential test verification** — Change the test verification gate to compare against the baseline. A verification PASSES if no NEW test failures appear (tests that weren't already failing). Pre-existing failures are ignored during per-iteration checks. Use test output parsing to compare failing test names, not just exit codes.
+- [ ] **Task 2:** Add iteration timing
+  - Record start time at iteration begin
+  - Log duration at iteration end: `[INFO] Iteration $i completed in ${duration}s`
+  - Test: Verify timing log appears with reasonable duration value
 
-- [x] **Task 3: Optional pre-existing failure fix iteration** — If the pre-flight baseline has failures, inject an automatic "fix pre-existing test failures" iteration BEFORE starting PRD tasks. This iteration gets the fix-tests prompt with the baseline output. If it fixes them, great — update the baseline. If it can't fix them after MAX_CONSECUTIVE_FAILURES attempts, log a warning and proceed with PRD tasks anyway (using differential verification from Task 2).
+### Phase 2: Error Capture
+- [ ] **Task 3:** Capture Claude Code exit code
+  - Store exit code after claude command completes
+  - On non-zero exit: log `[ERROR] Claude Code exited with code $exit_code`
+  - On non-zero exit: log last 500 chars of output
+  - Test: Simulate non-zero exit and verify error logging
 
-- [x] **Task 4: Update progress file logging** — When pre-existing failures are detected, log them clearly to the progress file at session start: "Pre-existing test failures detected: [list]. These will not block PRD work. Attempting auto-fix first."
+- [ ] **Task 4:** Add signal trapping for graceful shutdown
+  - Trap SIGTERM, SIGINT, SIGHUP
+  - On signal: log `[WARN] Received signal: $signal`
+  - On signal: log current iteration number and task name
+  - Test: Send SIGTERM to process and verify signal log appears
 
-- [x] **Task 5: Tests for the new behavior** — Add test cases (can be shell-based or a test script) covering: (a) pre-flight detects existing failures, (b) differential verification passes when only pre-existing tests fail, (c) differential verification fails when a new test breaks, (d) auto-fix iteration runs before PRD tasks.
+### Phase 3: State Persistence
+- [ ] **Task 5:** Save iteration state for resume capability
+  - On each iteration start: write current iteration to `$STATE_DIR/last_iteration`
+  - On each iteration start: write current task to `$STATE_DIR/last_task`
+  - On signal: state is already saved, log points to it
+  - Test: Verify state files are created and contain correct values
+
+## Acceptance Criteria
+- All tests pass
+- Resource logging appears at each iteration
+- Timing logging appears at each iteration end
+- Non-zero exits are logged with context
+- Trapped signals are logged with state info
+- No regressions in existing functionality
