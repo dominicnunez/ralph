@@ -27,7 +27,7 @@ Ralph processes get SIGKILL'd unexpectedly with no diagnostic information in log
   - Test: Verify timing log appears with reasonable duration value
 
 ### Phase 2: Error Capture
-- [ ] **Task 3:** Capture Claude Code exit code
+- [x] **Task 3:** Capture Claude Code exit code
   - Store exit code after claude command completes
   - On non-zero exit: log `[ERROR] Claude Code exited with code $exit_code`
   - On non-zero exit: log last 500 chars of output

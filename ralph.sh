@@ -881,8 +881,13 @@ while [[ "$MAX" -eq -1 ]] || [[ "$i" -lt "$MAX" ]]; do
 
     # Handle non-rate-limit errors
     if [[ $exit_code -ne 0 ]]; then
-        log "ERROR" "$ENGINE failed with exit code $exit_code"
+        log "ERROR" "Claude Code exited with code $exit_code"
         echo "Error from $ENGINE (exit code $exit_code)"
+
+        # Log last 500 characters of output for debugging
+        last_output=$(echo "$result" | tail -c 500)
+        log "ERROR" "Last 500 chars of output: $last_output"
+
         exit $exit_code
     fi
 
